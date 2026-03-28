@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -8,23 +9,21 @@ import {
 } from 'react-native';
 import DetectionAlert from '../components/DetectionAlert';
 import UserStats from '../components/UserStats';
-
-interface Detection {
-  id: string;
-  locationName: string;
-  address: string;
-}
-
-const MOCK_DETECTIONS: Detection[] = [
-  { id: '1', locationName: 'Coppell High School', address: '938-940 W Bethel Rd' },
-  { id: '2', locationName: 'Coppell High School', address: '938-940 W Bethel Rd' },
-  { id: '3', locationName: 'Town Center Park',    address: '768 W Main St'        },
-];
+import { useAppData } from '../context/AppDataContext';
+import { DEFAULT_USER_STATS } from '../services/userData';
 
 export default function HomeScreen() {
+  const { userData, isAppDataLoading, appDataError } = useAppData();
   const [dismissed, setDismissed] = useState<string[]>([]);
 
-  const visible = MOCK_DETECTIONS.filter(d => !dismissed.includes(d.id));
+  const detections = userData?.recentDetections ?? [];
+  const stats = userData?.stats ?? DEFAULT_USER_STATS;
+
+  const visible = useMemo(
+    () => detections.filter(d => !dismissed.includes(d.id)),
+    [detections, dismissed],
+  );
+
   const dismiss = (id: string) => setDismissed(prev => [...prev, id]);
 
   return (
@@ -35,9 +34,25 @@ export default function HomeScreen() {
       >
         <Text style={styles.title}>Recent Insights</Text>
 
-        <UserStats reports={100} coins={100} detections={100} repairs={100} />
+        <UserStats
+          reports={stats.reports}
+          coins={stats.coins}
+          detections={stats.detections}
+          repairs={stats.repairs}
+        />
+
+        {appDataError ? (
+          <Text style={styles.errorText}>{appDataError}</Text>
+        ) : null}
 
         <View style={styles.cardList}>
+          {isAppDataLoading ? (
+            <View style={styles.loadingRow}>
+              <ActivityIndicator size="small" color="#2563eb" />
+              <Text style={styles.loadingText}>Loading your detections...</Text>
+            </View>
+          ) : null}
+
           {visible.map(detection => (
             <DetectionAlert
               key={detection.id}
@@ -48,7 +63,7 @@ export default function HomeScreen() {
             />
           ))}
 
-          {visible.length === 0 && (
+          {!isAppDataLoading && visible.length === 0 && (
             <Text style={styles.emptyText}>No pending detections</Text>
           )}
         </View>
@@ -81,5 +96,20 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     fontSize: 14,
     marginTop: 32,
+  },
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 10,
+  },
+  loadingText: {
+    color: '#6b7280',
+    fontSize: 13,
+  },
+  errorText: {
+    color: '#b91c1c',
+    fontSize: 14,
   },
 });

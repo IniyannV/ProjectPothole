@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
+  ActivityIndicator,
   View,
   Text,
   StyleSheet,
@@ -9,6 +10,13 @@ import {
   SafeAreaView,
   Alert,
 } from 'react-native';
+import { useAppData } from '../context/AppDataContext';
+import { signOutFromFirebase } from '../services/firebaseAuth';
+import {
+  DEFAULT_USER_SETTINGS,
+  DEFAULT_USER_STATS,
+  UserSettings,
+} from '../services/userData';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -18,7 +26,6 @@ type SettingToggleProps = {
   value: boolean;
   onValueChange: (val: boolean) => void;
   icon: string;
-  accentColor?: string;
 };
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
@@ -28,13 +35,10 @@ const SettingToggle: React.FC<SettingToggleProps> = ({
   sublabel,
   value,
   onValueChange,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   icon,
-  accentColor = '#FF6B35',
 }) => (
   <View style={styles.settingRow}>
-    <View style={[styles.settingIcon, { backgroundColor: accentColor + '20' }]}>
-      <Text style={styles.settingIconText}>{icon}</Text>
-    </View>
     <View style={styles.settingText}>
       <Text style={styles.settingLabel}>{label}</Text>
       {sublabel ? <Text style={styles.settingSubLabel}>{sublabel}</Text> : null}
@@ -42,7 +46,7 @@ const SettingToggle: React.FC<SettingToggleProps> = ({
     <Switch
       value={value}
       onValueChange={onValueChange}
-      trackColor={{ false: '#2A2A2A', true: accentColor }}
+      trackColor={{ false: '#2A2A2A', true: BLUE }}
       thumbColor={value ? '#FFFFFF' : '#888888'}
       ios_backgroundColor="#2A2A2A"
     />
@@ -52,12 +56,44 @@ const SettingToggle: React.FC<SettingToggleProps> = ({
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
 const SettingsScreen: React.FC = () => {
-  const [sensingDriving, setSensingDriving] = useState(false);
-  const [notifications, setNotifications] = useState(true);
-  const [debugMode, setDebugMode] = useState(true);
-  const [modelTraining, setModelTraining] = useState(true);
-  const [hapticFeedback, setHapticFeedback] = useState(true);
-  const [autoReport, setAutoReport] = useState(false);
+  const { userData, isAppDataLoading, appDataError, saveSettings } =
+    useAppData();
+
+  const settings = userData?.settings ?? DEFAULT_USER_SETTINGS;
+  const stats = userData?.stats ?? DEFAULT_USER_STATS;
+  const displayName = userData?.name ?? 'Loading Profile';
+  const profileRole = userData?.profileRole ?? 'Road Contributor · Level 1';
+
+  const initials = displayName
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part[0]?.toUpperCase() ?? '')
+    .join('');
+
+  const setSetting = (key: keyof UserSettings) => async (value: boolean) => {
+    const nextSettings: UserSettings = {
+      ...settings,
+      [key]: value,
+    };
+
+    try {
+      await saveSettings(nextSettings);
+    } catch {
+      Alert.alert('Save Failed', 'Unable to update setting right now.');
+    }
+  };
+
+  const setSensitivity = async (sensitivity: UserSettings['sensitivity']) => {
+    try {
+      await saveSettings({
+        ...settings,
+        sensitivity,
+      });
+    } catch {
+      Alert.alert('Save Failed', 'Unable to update sensitivity right now.');
+    }
+  };
 
   const handleDeleteAccount = () => {
     Alert.alert(
@@ -73,7 +109,17 @@ const SettingsScreen: React.FC = () => {
   const handleSignOut = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign Out', style: 'default', onPress: () => {} },
+      {
+        text: 'Sign Out',
+        style: 'default',
+        onPress: async () => {
+          try {
+            await signOutFromFirebase();
+          } catch {
+            Alert.alert('Sign Out Failed', 'Please try again in a moment.');
+          }
+        },
+      },
     ]);
   };
 
@@ -99,27 +145,37 @@ const SettingsScreen: React.FC = () => {
           <View style={styles.avatarWrapper}>
             <View style={styles.avatarRing}>
               <View style={styles.avatar}>
-                <Text style={styles.avatarInitials}>AM</Text>
+                <Text style={styles.avatarInitials}>{initials || 'RC'}</Text>
               </View>
             </View>
             <View style={styles.onlineDot} />
           </View>
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>Aarnav Munji</Text>
-            <Text style={styles.profileRole}>Road Contributor · Level 4</Text>
+            <Text style={styles.profileName}>{displayName}</Text>
+            {isAppDataLoading ? (
+              <View style={styles.profileLoadingRow}>
+                <ActivityIndicator size="small" color={BLUE} />
+                <Text style={styles.profileLoadingText}>
+                  Syncing profile...
+                </Text>
+              </View>
+            ) : null}
+            {appDataError ? (
+              <Text style={styles.profileErrorText}>{appDataError}</Text>
+            ) : null}
             <View style={styles.statsRow}>
               <View style={styles.stat}>
-                <Text style={styles.statNum}>247</Text>
+                <Text style={styles.statNum}>{stats.potholes}</Text>
                 <Text style={styles.statLbl}>Potholes</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.stat}>
-                <Text style={styles.statNum}>18.2k</Text>
+                <Text style={styles.statNum}>{stats.points}</Text>
                 <Text style={styles.statLbl}>Points</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.stat}>
-                <Text style={styles.statNum}>94%</Text>
+                <Text style={styles.statNum}>{stats.accuracy}%</Text>
                 <Text style={styles.statLbl}>Accuracy</Text>
               </View>
             </View>
@@ -131,30 +187,27 @@ const SettingsScreen: React.FC = () => {
           <Text style={styles.sectionLabel}>DETECTION</Text>
           <View style={styles.card}>
             <SettingToggle
-              icon="🚗"
+              icon="SD"
               label="Sense while driving"
               sublabel="Auto-detect potholes via accelerometer"
-              value={sensingDriving}
-              onValueChange={setSensingDriving}
-              accentColor="#FF6B35"
+              value={settings.sensingDriving}
+              onValueChange={setSetting('sensingDriving')}
             />
             <View style={styles.divider} />
             <SettingToggle
-              icon="📤"
+              icon="AR"
               label="Auto-report detections"
               sublabel="Submit flagged events without confirmation"
-              value={autoReport}
-              onValueChange={setAutoReport}
-              accentColor="#FF6B35"
+              value={settings.autoReport}
+              onValueChange={setSetting('autoReport')}
             />
             <View style={styles.divider} />
             <SettingToggle
-              icon="📳"
+              icon="HF"
               label="Haptic feedback"
               sublabel="Vibrate on pothole detection"
-              value={hapticFeedback}
-              onValueChange={setHapticFeedback}
-              accentColor="#FF6B35"
+              value={settings.hapticFeedback}
+              onValueChange={setSetting('hapticFeedback')}
             />
           </View>
         </View>
@@ -164,30 +217,27 @@ const SettingsScreen: React.FC = () => {
           <Text style={styles.sectionLabel}>APP</Text>
           <View style={styles.card}>
             <SettingToggle
-              icon="🔔"
+              icon="NT"
               label="Notifications"
               sublabel="Alerts for nearby road hazards"
-              value={notifications}
-              onValueChange={setNotifications}
-              accentColor="#3B82F6"
+              value={settings.notifications}
+              onValueChange={setSetting('notifications')}
             />
             <View style={styles.divider} />
             <SettingToggle
-              icon="🧠"
+              icon="MT"
               label="Model training"
               sublabel="Contribute to improving AI detection"
-              value={modelTraining}
-              onValueChange={setModelTraining}
-              accentColor="#3B82F6"
+              value={settings.modelTraining}
+              onValueChange={setSetting('modelTraining')}
             />
             <View style={styles.divider} />
             <SettingToggle
-              icon="🐛"
+              icon="DB"
               label="Debug mode"
               sublabel="Show sensor data overlay on map"
-              value={debugMode}
-              onValueChange={setDebugMode}
-              accentColor="#A855F7"
+              value={settings.debugMode}
+              onValueChange={setSetting('debugMode')}
             />
           </View>
         </View>
@@ -197,19 +247,24 @@ const SettingsScreen: React.FC = () => {
           <Text style={styles.sectionLabel}>DETECTION SENSITIVITY</Text>
           <View style={styles.card}>
             <View style={styles.sensitivityRow}>
-              {['Low', 'Medium', 'High', 'Max'].map((level, i) => (
+              {['Low', 'Medium', 'High', 'Max'].map(level => (
                 <TouchableOpacity
                   key={level}
                   style={[
                     styles.sensitivityBtn,
-                    i === 2 && styles.sensitivityBtnActive,
+                    settings.sensitivity === level &&
+                      styles.sensitivityBtnActive,
                   ]}
+                  onPress={() =>
+                    setSensitivity(level as UserSettings['sensitivity'])
+                  }
                   activeOpacity={0.7}
                 >
                   <Text
                     style={[
                       styles.sensitivityBtnText,
-                      i === 2 && styles.sensitivityBtnTextActive,
+                      settings.sensitivity === level &&
+                        styles.sensitivityBtnTextActive,
                     ]}
                   >
                     {level}
@@ -232,7 +287,7 @@ const SettingsScreen: React.FC = () => {
               onPress={handleDeleteAccount}
               activeOpacity={0.8}
             >
-              <Text style={styles.deleteBtnText}>🗑  Delete Account</Text>
+              <Text style={styles.deleteBtnText}>Delete Account</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.signOutBtn}
@@ -248,24 +303,6 @@ const SettingsScreen: React.FC = () => {
           PotholeAI · Road Safety Initiative
         </Text>
       </ScrollView>
-
-      {/* ── Tab Bar ── */}
-      <View style={styles.tabBar}>
-        {[
-          { icon: '⚙️', label: 'Settings', active: true },
-          { icon: '🏠', label: 'Home', active: false },
-          { icon: '🗺️', label: 'Map', active: false },
-          { icon: 'ℹ️', label: 'Info', active: false },
-        ].map(tab => (
-          <TouchableOpacity key={tab.label} style={styles.tabItem} activeOpacity={0.7}>
-            <Text style={styles.tabIcon}>{tab.icon}</Text>
-            <Text style={[styles.tabLabel, tab.active && styles.tabLabelActive]}>
-              {tab.label}
-            </Text>
-            {tab.active && <View style={styles.tabActiveDot} />}
-          </TouchableOpacity>
-        ))}
-      </View>
     </SafeAreaView>
   );
 };
@@ -273,7 +310,7 @@ const SettingsScreen: React.FC = () => {
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
 const ORANGE = '#FF6B35';
-const BLUE = '#3B82F6';
+const BLUE = '#2563EB';
 const BG = '#0E0E0F';
 const CARD = '#1A1A1C';
 const BORDER = '#2C2C2E';
@@ -388,7 +425,22 @@ const styles = StyleSheet.create({
     color: TEXT_SECONDARY,
     fontSize: 13,
     marginTop: 2,
-    marginBottom: 12,
+    marginBottom: 8,
+  },
+  profileLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  profileLoadingText: {
+    color: TEXT_SECONDARY,
+    fontSize: 12,
+  },
+  profileErrorText: {
+    color: '#F87171',
+    fontSize: 12,
+    marginBottom: 6,
   },
   statsRow: {
     flexDirection: 'row',
@@ -451,11 +503,14 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 10,
+    backgroundColor: BLUE + '20',
     justifyContent: 'center',
     alignItems: 'center',
   },
   settingIconText: {
-    fontSize: 18,
+    fontSize: 12,
+    fontWeight: '700',
+    color: BLUE,
   },
   settingText: {
     flex: 1,
@@ -492,8 +547,8 @@ const styles = StyleSheet.create({
     borderColor: BORDER,
   },
   sensitivityBtnActive: {
-    backgroundColor: ORANGE,
-    borderColor: ORANGE,
+    backgroundColor: BLUE,
+    borderColor: BLUE,
   },
   sensitivityBtnText: {
     color: TEXT_SECONDARY,
@@ -555,40 +610,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 32,
     letterSpacing: 0.3,
-  },
-
-  // Tab bar
-  tabBar: {
-    flexDirection: 'row',
-    backgroundColor: CARD,
-    borderTopWidth: 1,
-    borderTopColor: BORDER,
-    paddingBottom: 24,
-    paddingTop: 10,
-  },
-  tabItem: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 3,
-  },
-  tabIcon: {
-    fontSize: 20,
-  },
-  tabLabel: {
-    color: TEXT_SECONDARY,
-    fontSize: 10,
-    fontWeight: '500',
-  },
-  tabLabelActive: {
-    color: ORANGE,
-    fontWeight: '700',
-  },
-  tabActiveDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: ORANGE,
-    marginTop: 1,
   },
 });
 

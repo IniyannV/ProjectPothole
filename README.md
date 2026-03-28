@@ -1,5 +1,26 @@
 This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
 
+## Firebase Google Sign-Up Setup
+
+The app now opens with a Google sign-up screen and only shows the main tabs after Firebase authentication succeeds.
+
+Complete these one-time setup steps for your Firebase project:
+
+1. In Firebase Console, create or open your project.
+2. Enable `Google` under **Authentication > Sign-in method**.
+3. In **Project settings > General > Your apps > SDK setup and configuration**, copy your Firebase Web config values.
+4. Replace all `YOUR_FIREBASE_*` placeholders in `services/firebaseAuth.ts`.
+5. Copy the OAuth Web Client ID and replace `YOUR_FIREBASE_WEB_CLIENT_ID` in `services/firebaseAuth.ts`.
+6. Copy the iOS OAuth Client ID and replace `YOUR_FIREBASE_IOS_CLIENT_ID` in `services/firebaseAuth.ts`.
+7. Add your iOS OAuth reversed client ID as a URL scheme for the `ProjectPothole` target (Xcode > Target > Info > URL Types).
+8. Reinstall iOS pods:
+
+```sh
+bundle exec pod install --project-directory=ios
+```
+
+After setup, users will be prompted to sign up/sign in with Google when they first open the app.
+
 # Getting Started
 
 > **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.

@@ -31,7 +31,9 @@ export default function DetectionAlert({
           <Text style={styles.locationName}>{locationName}</Text>
           <Text style={styles.address}>{address}</Text>
         </View>
-        {logo && <Image source={logo} style={styles.logo} resizeMode="contain" />}
+        {logo && (
+          <Image source={logo} style={styles.logo} resizeMode="contain" />
+        )}
       </View>
 
       <View style={styles.divider} />
@@ -41,11 +43,19 @@ export default function DetectionAlert({
 
       {/* Buttons */}
       <View style={styles.buttonRow}>
-        <TouchableOpacity style={[styles.button, styles.confirmButton]} onPress={onConfirm} activeOpacity={0.8}>
-          <Text style={styles.buttonIcon}>✓</Text>
+        <TouchableOpacity
+          style={[styles.button, styles.confirmButton]}
+          onPress={onConfirm}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.buttonText}>Yes</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.button, styles.denyButton]} onPress={onDeny} activeOpacity={0.8}>
-          <Text style={styles.buttonIcon}>✕</Text>
+        <TouchableOpacity
+          style={[styles.button, styles.denyButton]}
+          onPress={onDeny}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.buttonText}>No</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -61,7 +71,7 @@ const styles = StyleSheet.create({
     paddingBottom: 18,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.10,
+    shadowOpacity: 0.1,
     shadowRadius: 12,
     elevation: 6,
     minWidth: 260,
@@ -126,10 +136,9 @@ const styles = StyleSheet.create({
   denyButton: {
     backgroundColor: '#ef4444',
   },
-  buttonIcon: {
+  buttonText: {
     color: '#ffffff',
-    fontSize: 20,
+    fontSize: 14,
     fontWeight: '700',
-    lineHeight: 22,
   },
 });

@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import Geolocation from '@react-native-community/geolocation';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
+import { useAppData } from '../context/AppDataContext';
 
 type FilterKey = 'all' | 'pothole' | 'rough' | 'good' | 'monitored';
 
@@ -29,49 +30,6 @@ type Hotspot = {
 };
 
 type LocationStatus = 'locating' | 'live' | 'denied' | 'error';
-
-const HOTSPOTS: Hotspot[] = [
-  {
-    id: 1,
-    name: 'Market St & 5th',
-    type: 'pothole',
-    severity: 'high',
-    reports: 21,
-    cost: '$2.8k',
-    color: '#E24B4A',
-    coord: [-122.4064, 37.7832],
-  },
-  {
-    id: 2,
-    name: 'Folsom St Segment',
-    type: 'rough',
-    severity: 'medium',
-    reports: 13,
-    cost: '$1.4k',
-    color: '#EF9F27',
-    coord: [-122.3997, 37.7898],
-  },
-  {
-    id: 3,
-    name: 'Howard St Improvement',
-    type: 'good',
-    severity: 'low',
-    reports: 9,
-    cost: '$0.6k',
-    color: '#639922',
-    coord: [-122.4103, 37.7764],
-  },
-  {
-    id: 4,
-    name: 'Mission St Monitoring',
-    type: 'monitored',
-    severity: 'medium',
-    reports: 4,
-    cost: '$0.4k',
-    color: '#378ADD',
-    coord: [-122.4184, 37.7818],
-  },
-];
 
 function makeMapHtml(hotspots: Hotspot[], selectedId: number | null) {
   const hotspotsJson = JSON.stringify(hotspots);
@@ -308,6 +266,7 @@ function makeMapHtml(hotspots: Hotspot[], selectedId: number | null) {
 }
 
 export default function MapScreen() {
+  const { userData, isAppDataLoading, appDataError } = useAppData();
   const webViewRef = useRef<WebView>(null);
   const hasCenteredOnUserRef = useRef(false);
   const didShowLocationAlertRef = useRef(false);
@@ -320,8 +279,9 @@ export default function MapScreen() {
     null,
   );
   const popupAnim = useRef(new Animated.Value(0)).current;
+  const hotspots = userData?.mapHotspots ?? [];
 
-  const filtered = HOTSPOTS.filter(h => filter === 'all' || h.type === filter);
+  const filtered = hotspots.filter(h => filter === 'all' || h.type === filter);
 
   useEffect(() => {
     if (selected && !filtered.some(h => h.id === selected.id)) {
@@ -513,7 +473,7 @@ export default function MapScreen() {
     try {
       const payload = JSON.parse(event.nativeEvent.data);
       if (payload?.type === 'select') {
-        const hotspot = HOTSPOTS.find(h => h.id === payload.id);
+        const hotspot = hotspots.find(h => h.id === payload.id);
         if (hotspot) {
           handleSelect(hotspot);
         }
@@ -547,6 +507,14 @@ export default function MapScreen() {
         onLoadStart={() => setIsMapReady(false)}
         onMessage={onMapMessage}
       />
+
+      {(isAppDataLoading || appDataError) && (
+        <View style={styles.statusBanner}>
+          <Text style={styles.statusText}>
+            {isAppDataLoading ? 'Loading map data...' : appDataError}
+          </Text>
+        </View>
+      )}
 
       <ScrollView
         horizontal
@@ -609,7 +577,7 @@ export default function MapScreen() {
                 <Text style={styles.popupName}>{selected.name}</Text>
               </View>
               <TouchableOpacity onPress={dismissPopup} style={styles.closeBtn}>
-                <Text style={styles.closeText}>✕</Text>
+                <Text style={styles.closeText}>Close</Text>
               </TouchableOpacity>
             </View>
             <View style={styles.popupGrid}>
@@ -737,6 +705,23 @@ const styles = StyleSheet.create({
   },
   filterTextActive: { color: '#FFFFFF' },
   filterTextInactive: { color: 'rgba(255,255,255,0.4)' },
+  statusBanner: {
+    position: 'absolute',
+    top: 50,
+    left: 16,
+    right: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: 'rgba(8,14,22,0.92)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  statusText: {
+    color: 'rgba(255,255,255,0.86)',
+    fontSize: 12,
+    textAlign: 'center',
+  },
 
   popup: {
     position: 'absolute',
@@ -774,7 +759,7 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   closeBtn: { padding: 4 },
-  closeText: { color: 'rgba(255,255,255,0.3)', fontSize: 14 },
+  closeText: { color: 'rgba(255,255,255,0.6)', fontSize: 11 },
   popupGrid: { flexDirection: 'row', gap: 0 },
   popupStat: { flex: 1, alignItems: 'center' },
   popupStatLabel: {

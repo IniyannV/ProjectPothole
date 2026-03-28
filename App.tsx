@@ -7,13 +7,28 @@
 
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer } from '@react-navigation/native';
-import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  StatusBar,
+  StyleSheet,
+  useColorScheme,
+  View,
+} from 'react-native';
+import { User } from 'firebase/auth';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import GlassTabBar from './components/GlassTabBar';
+import { AppDataProvider } from './context/AppDataContext';
+import AuthScreen from './screens/AuthScreen';
 import HomeScreen from './screens/HomeScreen';
 import InfoScreen from './screens/InfoScreen';
 import MapScreen from './screens/MapScreen';
 import SettingsScreen from './screens/SettingsScreen';
+import {
+  configureGoogleSignIn,
+  observeAuthState,
+  signInWithGoogle,
+} from './services/firebaseAuth';
 
 const Tab = createBottomTabNavigator();
 const renderGlassTabBar = (props: Parameters<typeof GlassTabBar>[0]) => (
@@ -22,35 +37,98 @@ const renderGlassTabBar = (props: Parameters<typeof GlassTabBar>[0]) => (
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
+  const [isAuthInitializing, setIsAuthInitializing] = useState(true);
+  const [user, setUser] = useState<User | null>(null);
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  useEffect(() => {
+    configureGoogleSignIn();
+
+    const unsubscribe = observeAuthState(nextUser => {
+      setUser(nextUser);
+      setIsAuthInitializing(false);
+      if (nextUser) {
+        setAuthError(null);
+      }
+    });
+
+    return unsubscribe;
+  }, []);
+
+  const handleGoogleSignIn = async () => {
+    setAuthError(null);
+    setIsSigningIn(true);
+    try {
+      await signInWithGoogle();
+    } catch (error) {
+      const fallback = 'Unable to sign in with Google. Please try again.';
+      const message = error instanceof Error ? error.message : fallback;
+      setAuthError(message || fallback);
+    } finally {
+      setIsSigningIn(false);
+    }
+  };
+
+  if (isAuthInitializing) {
+    return (
+      <SafeAreaProvider>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#2563eb" />
+        </View>
+      </SafeAreaProvider>
+    );
+  }
+
+  if (!user) {
+    return (
+      <SafeAreaProvider>
+        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+        <AuthScreen
+          isSigningIn={isSigningIn}
+          errorMessage={authError}
+          onGoogleSignIn={handleGoogleSignIn}
+        />
+      </SafeAreaProvider>
+    );
+  }
 
   return (
     <SafeAreaProvider>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <NavigationContainer>
-        <View style={styles.appContainer}>
-          <View style={styles.glowOrbTop} />
-          <View style={styles.glowOrbBottom} />
-          <Tab.Navigator
-            initialRouteName="Home"
-            tabBar={renderGlassTabBar}
-            screenOptions={{
-              headerShown: false,
-              sceneStyle: styles.scene,
-              tabBarHideOnKeyboard: true,
-            }}
-          >
-            <Tab.Screen name="Home" component={HomeScreen} />
-            <Tab.Screen name="Map" component={MapScreen} />
-            <Tab.Screen name="Info" component={InfoScreen} />
-            <Tab.Screen name="Settings" component={SettingsScreen} />
-          </Tab.Navigator>
-        </View>
-      </NavigationContainer>
+      <AppDataProvider user={user}>
+        <NavigationContainer>
+          <View style={styles.appContainer}>
+            <View style={styles.glowOrbTop} />
+            <View style={styles.glowOrbBottom} />
+            <Tab.Navigator
+              initialRouteName="Home"
+              tabBar={renderGlassTabBar}
+              screenOptions={{
+                headerShown: false,
+                sceneStyle: styles.scene,
+                tabBarHideOnKeyboard: true,
+              }}
+            >
+              <Tab.Screen name="Home" component={HomeScreen} />
+              <Tab.Screen name="Map" component={MapScreen} />
+              <Tab.Screen name="Info" component={InfoScreen} />
+              <Tab.Screen name="Settings" component={SettingsScreen} />
+            </Tab.Navigator>
+          </View>
+        </NavigationContainer>
+      </AppDataProvider>
     </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#eaf1fb',
+  },
   appContainer: {
     flex: 1,
     backgroundColor: '#eaf1fb',
