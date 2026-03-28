@@ -148,7 +148,9 @@ function TabItem({
             size={21}
             weight="semibold"
             scale="medium"
-            color={isActive ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.60)'}
+            color={
+              isActive ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.60)'
+            }
             style={styles.symbolIcon}
           />
         </Animated.View>
