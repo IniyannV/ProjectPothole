@@ -134,9 +134,6 @@ const SettingsScreen: React.FC = () => {
         <View style={styles.header}>
           <View style={styles.headerTop}>
             <Text style={styles.headerTitle}>Settings</Text>
-            <View style={styles.versionBadge}>
-              <Text style={styles.versionText}>v2.4.1</Text>
-            </View>
           </View>
         </View>
 

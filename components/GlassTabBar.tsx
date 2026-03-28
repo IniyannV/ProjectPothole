@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-type TabKey = 'home' | 'map' | 'info' | 'settings';
+type TabKey = 'home' | 'map' | 'settings';
 
 interface Tab {
   key: TabKey;
@@ -25,7 +25,6 @@ interface Tab {
 const TABS: Tab[] = [
   { key: 'home', label: 'Home', symbol: 'house.fill' },
   { key: 'map', label: 'Map', symbol: 'map.fill' },
-  { key: 'info', label: 'Info', symbol: 'info.circle.fill' },
   { key: 'settings', label: 'Settings', symbol: 'gearshape.fill' },
 ];
 

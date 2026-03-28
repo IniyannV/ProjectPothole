@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import Geolocation from '@react-native-community/geolocation';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { useAppData } from '../context/AppDataContext';
 
@@ -267,6 +268,7 @@ function makeMapHtml(hotspots: Hotspot[], selectedId: number | null) {
 
 export default function MapScreen() {
   const { userData, isAppDataLoading, appDataError } = useAppData();
+  const insets = useSafeAreaInsets();
   const webViewRef = useRef<WebView>(null);
   const hasCenteredOnUserRef = useRef(false);
   const didShowLocationAlertRef = useRef(false);
@@ -519,7 +521,7 @@ export default function MapScreen() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={styles.filtersRow}
+        style={[styles.filtersRow, { top: insets.top + 8 }]}
         contentContainerStyle={styles.scrollContent}
       >
         {filters.map(f => (

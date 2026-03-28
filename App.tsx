@@ -112,7 +112,7 @@ function App() {
             >
               <Tab.Screen name="Home" component={HomeScreen} />
               <Tab.Screen name="Map" component={MapScreen} />
-              <Tab.Screen name="Info" component={InfoScreen} />
+              {/* <Tab.Screen name="Info" component={InfoScreen} /> */}
               <Tab.Screen name="Settings" component={SettingsScreen} />
             </Tab.Navigator>
           </View>
