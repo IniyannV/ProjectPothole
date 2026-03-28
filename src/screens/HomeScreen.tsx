@@ -19,6 +19,7 @@ import { DriveReviewModal } from '../components/DriveReviewModal';
 import { DriveSession, EventType, EVENT_LABELS } from '../types';
 import { colors } from '../theme/colors';
 import { DriveStackParamList } from '../navigation/DriveStackNavigator';
+import { useAppData } from '../../context/AppDataContext';
 
 const EVENT_COLOR: Record<EventType, string> = {
   POTHOLE: colors.pothole,
@@ -48,6 +49,7 @@ export function HomeScreen() {
     confirmSession,
     dismissLastEvent,
   } = useDriveSession();
+  const { syncReviewedSession } = useAppData();
 
   const [elapsed, setElapsed] = React.useState('00:00');
   const [pendingSession, setPendingSession] = useState<DriveSession | null>(
@@ -229,6 +231,14 @@ export function HomeScreen() {
           session={pendingSession}
           onConfirm={async reviewed => {
             await confirmSession(reviewed);
+            try {
+              await syncReviewedSession(reviewed);
+            } catch {
+              Alert.alert(
+                'Saved locally',
+                'Drive review was saved on device, but cloud sync failed. It will appear on map after a successful sync.',
+              );
+            }
             setPendingSession(null);
           }}
           onDismiss={() => setPendingSession(null)}

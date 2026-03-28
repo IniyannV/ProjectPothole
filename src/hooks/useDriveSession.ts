@@ -20,6 +20,7 @@ export function useDriveSession() {
   const sessionRef = useRef<DriveSession | null>(null);
   const geoWatchRef = useRef<number | null>(null);
   const speedRef = useRef<number>(0);
+  const coordRef = useRef<[number, number] | null>(null);
   const settingsRef = useRef<AppSettings | null>(null);
 
   useEffect(() => {
@@ -35,7 +36,7 @@ export function useDriveSession() {
       if (s) {
         setActiveSession(s);
         sessionRef.current = s;
-        startAccelerometer(s);
+        startAccelerometer();
       }
     });
     return () => {
@@ -51,7 +52,7 @@ export function useDriveSession() {
     settingsRef.current = s;
   }, []);
 
-  const startAccelerometer = useCallback((session: DriveSession) => {
+  const startAccelerometer = useCallback(() => {
     engineRef.current.reset();
     setUpdateIntervalForType(SensorTypes.accelerometer, SAMPLE_INTERVAL_MS);
 
@@ -72,6 +73,7 @@ export function useDriveSession() {
         const event: DetectionEvent = {
           id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
           confirmed: null,
+          coord: coordRef.current ?? undefined,
           ...result,
         };
 
@@ -103,6 +105,7 @@ export function useDriveSession() {
       pos => {
         const mph = (pos.coords.speed ?? 0) * 2.23694;
         speedRef.current = mph;
+        coordRef.current = [pos.coords.longitude, pos.coords.latitude];
         setCurrentSpeed(mph);
       },
       _err => {},
@@ -129,7 +132,7 @@ export function useDriveSession() {
     await StorageService.setActiveSession(session);
     await refreshSettings();
     startLocationWatch();
-    startAccelerometer(session);
+    startAccelerometer();
   }, [startAccelerometer, startLocationWatch, refreshSettings]);
 
   const endSession = useCallback(async (): Promise<DriveSession | null> => {

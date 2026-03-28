@@ -8,18 +8,24 @@ import React, {
 } from 'react';
 import { User } from 'firebase/auth';
 import {
+  CommunityHotspot,
   UserAppData,
   UserSettings,
   ensureUserDataInitialized,
+  listCommunityHotspots,
   updateUserSettings,
 } from '../services/userData';
+import { syncReviewedSessionToFirestore } from '../services/detectionSync';
+import { DriveSession } from '../src/types';
 
 type AppDataContextValue = {
   userData: UserAppData | null;
+  communityHotspots: CommunityHotspot[];
   isAppDataLoading: boolean;
   appDataError: string | null;
   refreshUserData: () => Promise<void>;
   saveSettings: (next: UserSettings) => Promise<void>;
+  syncReviewedSession: (session: DriveSession) => Promise<void>;
 };
 
 const AppDataContext = createContext<AppDataContextValue | undefined>(
@@ -33,6 +39,9 @@ type AppDataProviderProps = {
 
 export function AppDataProvider({ user, children }: AppDataProviderProps) {
   const [userData, setUserData] = useState<UserAppData | null>(null);
+  const [communityHotspots, setCommunityHotspots] = useState<
+    CommunityHotspot[]
+  >([]);
   const [isAppDataLoading, setIsAppDataLoading] = useState(true);
   const [appDataError, setAppDataError] = useState<string | null>(null);
 
@@ -40,8 +49,12 @@ export function AppDataProvider({ user, children }: AppDataProviderProps) {
     setIsAppDataLoading(true);
     setAppDataError(null);
     try {
-      const data = await ensureUserDataInitialized(user);
+      const [data, hotspots] = await Promise.all([
+        ensureUserDataInitialized(user),
+        listCommunityHotspots(),
+      ]);
       setUserData(data);
+      setCommunityHotspots(hotspots);
     } catch (error) {
       const fallback = 'Unable to load your account data.';
       const message = error instanceof Error ? error.message : fallback;
@@ -73,15 +86,33 @@ export function AppDataProvider({ user, children }: AppDataProviderProps) {
     [user.uid],
   );
 
+  const syncReviewedSession = useCallback(
+    async (session: DriveSession) => {
+      await syncReviewedSessionToFirestore(user.uid, session);
+      await refreshUserData();
+    },
+    [refreshUserData, user.uid],
+  );
+
   const value = useMemo(
     () => ({
       userData,
+      communityHotspots,
       isAppDataLoading,
       appDataError,
       refreshUserData,
       saveSettings,
+      syncReviewedSession,
     }),
-    [userData, isAppDataLoading, appDataError, refreshUserData, saveSettings],
+    [
+      userData,
+      communityHotspots,
+      isAppDataLoading,
+      appDataError,
+      refreshUserData,
+      saveSettings,
+      syncReviewedSession,
+    ],
   );
 
   return (

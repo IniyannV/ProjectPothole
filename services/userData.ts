@@ -1,7 +1,9 @@
 import { User } from 'firebase/auth';
 import {
+  collection,
   doc,
   getDoc,
+  getDocs,
   getFirestore,
   setDoc,
 } from 'firebase/firestore';
@@ -26,6 +28,18 @@ export type MapHotspot = {
   cost: string;
   color: string;
   coord: [number, number];
+};
+
+export type CommunityHotspot = {
+  id: string;
+  name: string;
+  type: HotspotType;
+  severity: 'low' | 'medium' | 'high';
+  reports: number;
+  cost: string;
+  color: string;
+  coord: [number, number];
+  updatedAtMs: number;
 };
 
 export type UserSettings = {
@@ -64,6 +78,7 @@ export type UserAppData = {
 const db = getFirestore(getFirebaseApp());
 
 const COLLECTION_USERS = 'users';
+const COLLECTION_HOTSPOTS = 'hotspots';
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
   sensingDriving: false,
@@ -146,6 +161,51 @@ function sanitizeHotspot(value: unknown): MapHotspot | null {
     cost: item.cost,
     color: item.color,
     coord: [item.coord[0], item.coord[1]],
+  };
+}
+
+function sanitizeCommunityHotspot(
+  id: string,
+  value: unknown,
+): CommunityHotspot | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const item = value as Partial<CommunityHotspot>;
+  if (
+    typeof item.name !== 'string' ||
+    (item.type !== 'pothole' &&
+      item.type !== 'rough' &&
+      item.type !== 'good' &&
+      item.type !== 'monitored') ||
+    (item.severity !== 'low' &&
+      item.severity !== 'medium' &&
+      item.severity !== 'high') ||
+    typeof item.reports !== 'number' ||
+    typeof item.cost !== 'string' ||
+    !Array.isArray(item.coord) ||
+    item.coord.length !== 2 ||
+    typeof item.coord[0] !== 'number' ||
+    typeof item.coord[1] !== 'number'
+  ) {
+    return null;
+  }
+
+  return {
+    id,
+    name: item.name,
+    type: item.type,
+    severity: item.severity,
+    reports: item.reports,
+    cost: item.cost,
+    color:
+      typeof item.color === 'string' && item.color.trim().length > 0
+        ? item.color
+        : '#E24B4A',
+    coord: [item.coord[0], item.coord[1]],
+    updatedAtMs:
+      typeof item.updatedAtMs === 'number' ? item.updatedAtMs : Date.now(),
   };
 }
 
@@ -325,4 +385,15 @@ export async function updateUserSettings(
     },
     { merge: true },
   );
+}
+
+export async function listCommunityHotspots(): Promise<CommunityHotspot[]> {
+  const snapshot = await getDocs(collection(db, COLLECTION_HOTSPOTS));
+
+  const items = snapshot.docs
+    .map(item => sanitizeCommunityHotspot(item.id, item.data()))
+    .filter((item): item is CommunityHotspot => item != null)
+    .sort((a, b) => b.updatedAtMs - a.updatedAtMs);
+
+  return items;
 }

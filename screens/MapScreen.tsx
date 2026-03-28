@@ -16,11 +16,12 @@ import Geolocation from '@react-native-community/geolocation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { useAppData } from '../context/AppDataContext';
+import { CommunityHotspot } from '../services/userData';
 
 type FilterKey = 'all' | 'pothole' | 'rough' | 'good' | 'monitored';
 
 type Hotspot = {
-  id: number;
+  id: string;
   name: string;
   type: Exclude<FilterKey, 'all'>;
   severity: 'low' | 'medium' | 'high';
@@ -28,11 +29,117 @@ type Hotspot = {
   cost: string;
   color: string;
   coord: [number, number];
+  updatedAtMs?: number;
 };
 
 type LocationStatus = 'locating' | 'live' | 'denied' | 'error';
 
-function makeMapHtml(hotspots: Hotspot[], selectedId: number | null) {
+const GROUPING_DISTANCE_METERS = 35;
+
+function toRad(value: number): number {
+  return (value * Math.PI) / 180;
+}
+
+function distanceMeters(a: [number, number], b: [number, number]): number {
+  const earthRadius = 6371000;
+  const dLat = toRad(b[1] - a[1]);
+  const dLng = toRad(b[0] - a[0]);
+  const lat1 = toRad(a[1]);
+  const lat2 = toRad(b[1]);
+  const sinLat = Math.sin(dLat / 2);
+  const sinLng = Math.sin(dLng / 2);
+  const haversine =
+    sinLat * sinLat + Math.cos(lat1) * Math.cos(lat2) * sinLng * sinLng;
+
+  return 2 * earthRadius * Math.asin(Math.sqrt(haversine));
+}
+
+function severityRank(value: Hotspot['severity']): number {
+  if (value === 'high') {
+    return 3;
+  }
+  if (value === 'medium') {
+    return 2;
+  }
+  return 1;
+}
+
+function severityToColor(severity: Hotspot['severity']): string {
+  if (severity === 'high') {
+    return '#E24B4A';
+  }
+  if (severity === 'medium') {
+    return '#EF9F27';
+  }
+  return '#378ADD';
+}
+
+function coerceHotspot(input: CommunityHotspot): Hotspot {
+  return {
+    ...input,
+    color: severityToColor(input.severity),
+  };
+}
+
+function groupNearbyHotspots(hotspots: Hotspot[]): Hotspot[] {
+  const grouped: Array<Hotspot & { memberCount: number }> = [];
+
+  hotspots.forEach(hotspot => {
+    let nearestIndex = -1;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+
+    grouped.forEach((candidate, index) => {
+      const distance = distanceMeters(candidate.coord, hotspot.coord);
+      if (distance <= GROUPING_DISTANCE_METERS && distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestIndex = index;
+      }
+    });
+
+    if (nearestIndex === -1) {
+      grouped.push({
+        ...hotspot,
+        memberCount: 1,
+      });
+      return;
+    }
+
+    const target = grouped[nearestIndex];
+    const nextCount = target.memberCount + 1;
+    const targetSeverityRank = severityRank(target.severity);
+    const incomingSeverityRank = severityRank(hotspot.severity);
+    const nextSeverity =
+      incomingSeverityRank > targetSeverityRank
+        ? hotspot.severity
+        : target.severity;
+    const nextType =
+      incomingSeverityRank > targetSeverityRank ? hotspot.type : target.type;
+
+    target.coord = [
+      (target.coord[0] * target.memberCount + hotspot.coord[0]) / nextCount,
+      (target.coord[1] * target.memberCount + hotspot.coord[1]) / nextCount,
+    ];
+    target.memberCount = nextCount;
+    target.reports += hotspot.reports;
+    target.severity = nextSeverity;
+    target.type = nextType;
+    target.color = severityToColor(nextSeverity);
+    target.updatedAtMs = Math.max(
+      target.updatedAtMs ?? 0,
+      hotspot.updatedAtMs ?? 0,
+    );
+    target.id = `${target.id}|${hotspot.id}`;
+    target.name =
+      target.memberCount > 1 ? `Grouped ${target.type}` : target.name;
+  });
+
+  return grouped.map(item => {
+    const { memberCount, ...rest } = item;
+    return rest;
+  });
+}
+
+function makeMapHtml(hotspots: Hotspot[], selectedId: string | null) {
   const hotspotsJson = JSON.stringify(hotspots);
   const selectedJson = selectedId == null ? 'null' : JSON.stringify(selectedId);
 
@@ -113,6 +220,20 @@ function makeMapHtml(hotspots: Hotspot[], selectedId: number | null) {
         rgb: hexToRgb(h.color),
       }));
 
+      const maxReports = hotspotData.reduce(
+        (max, hotspot) => Math.max(max, hotspot.reports || 0),
+        1,
+      );
+
+      function reportScale(reports) {
+        if (!Number.isFinite(reports) || reports <= 0) {
+          return 0;
+        }
+
+        // Log scaling keeps very large clusters readable without exploding marker size.
+        return Math.min(1, Math.log1p(reports) / Math.log1p(maxReports));
+      }
+
       const map = new maplibregl.Map({
         container: 'map',
         style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
@@ -132,16 +253,45 @@ function makeMapHtml(hotspots: Hotspot[], selectedId: number | null) {
       function createDeckLayers(data, focusedId) {
         return [
           new deck.ScatterplotLayer({
+            id: 'hotspot-outer-aura',
+            data,
+            pickable: false,
+            stroked: false,
+            radiusUnits: 'pixels',
+            getPosition: (d) => d.position,
+            getFillColor: (d) => {
+              const scale = reportScale(d.reports);
+              const alpha = Math.round(30 + scale * 55);
+              return [...d.rgb, alpha];
+            },
+            getRadius: (d) => {
+              const scale = reportScale(d.reports);
+              const base = 28 + scale * 20;
+              return d.id === focusedId ? base * 1.2 : base;
+            },
+            radiusMinPixels: 28,
+            radiusMaxPixels: 64,
+            parameters: { depthTest: false },
+          }),
+          new deck.ScatterplotLayer({
             id: 'hotspot-glow',
             data,
             pickable: false,
             stroked: false,
             radiusUnits: 'pixels',
             getPosition: (d) => d.position,
-            getFillColor: (d) => [...d.rgb, 80],
-            getRadius: (d) => (d.id === focusedId ? 9 : 7),
-            radiusMinPixels: 6,
-            radiusMaxPixels: 10,
+            getFillColor: (d) => {
+              const scale = reportScale(d.reports);
+              const alpha = Math.round(74 + scale * 80);
+              return [...d.rgb, alpha];
+            },
+            getRadius: (d) => {
+              const scale = reportScale(d.reports);
+              const base = 22 + scale * 16;
+              return d.id === focusedId ? base * 1.18 : base;
+            },
+            radiusMinPixels: 20,
+            radiusMaxPixels: 50,
             parameters: { depthTest: false },
           }),
           new deck.ScatterplotLayer({
@@ -154,12 +304,25 @@ function makeMapHtml(hotspots: Hotspot[], selectedId: number | null) {
             lineWidthMinPixels: 1,
             radiusUnits: 'pixels',
             getPosition: (d) => d.position,
-            getFillColor: (d) => (d.id === focusedId ? [255, 255, 255, 235] : [...d.rgb, 245]),
+            getFillColor: (d) => {
+              const scale = reportScale(d.reports);
+              if (d.id === focusedId) {
+                const alpha = Math.round(236 + scale * 19);
+                return [255, 255, 255, alpha];
+              }
+
+              const alpha = Math.round(202 + scale * 53);
+              return [...d.rgb, alpha];
+            },
             getLineColor: () => [255, 255, 255, 210],
-            getLineWidth: (d) => (d.id === focusedId ? 2 : 1),
-            getRadius: (d) => (d.id === focusedId ? 5 : 4),
-            radiusMinPixels: 3,
-            radiusMaxPixels: 6,
+            getLineWidth: (d) => (d.id === focusedId ? 3 : 2),
+            getRadius: (d) => {
+              const scale = reportScale(d.reports);
+              const base = 10 + scale * 9;
+              return d.id === focusedId ? base * 1.25 : base;
+            },
+            radiusMinPixels: 10,
+            radiusMaxPixels: 26,
             onClick: ({ object }) => {
               if (!object) {
                 return;
@@ -179,10 +342,10 @@ function makeMapHtml(hotspots: Hotspot[], selectedId: number | null) {
             getText: (d) => String(d.reports),
             getColor: () => [255, 255, 255, 245],
             sizeUnits: 'pixels',
-            getSize: (d) => (d.id === focusedId ? 11 : 10),
-            sizeMinPixels: 9,
-            sizeMaxPixels: 12,
-            getPixelOffset: [0, -14],
+            getSize: (d) => (d.id === focusedId ? 14 : 13),
+            sizeMinPixels: 12,
+            sizeMaxPixels: 16,
+            getPixelOffset: [0, -24],
             getTextAnchor: 'middle',
             getAlignmentBaseline: 'center',
             fontFamily: 'Arial, sans-serif',
@@ -267,7 +430,7 @@ function makeMapHtml(hotspots: Hotspot[], selectedId: number | null) {
 }
 
 export default function MapScreen() {
-  const { userData, isAppDataLoading, appDataError } = useAppData();
+  const { communityHotspots, isAppDataLoading, appDataError } = useAppData();
   const insets = useSafeAreaInsets();
   const webViewRef = useRef<WebView>(null);
   const hasCenteredOnUserRef = useRef(false);
@@ -281,9 +444,15 @@ export default function MapScreen() {
     null,
   );
   const popupAnim = useRef(new Animated.Value(0)).current;
-  const hotspots = userData?.mapHotspots ?? [];
+  const hotspots = useMemo(
+    () => groupNearbyHotspots(communityHotspots.map(coerceHotspot)),
+    [communityHotspots],
+  );
 
-  const filtered = hotspots.filter(h => filter === 'all' || h.type === filter);
+  const filtered = useMemo(
+    () => hotspots.filter(h => filter === 'all' || h.type === filter),
+    [filter, hotspots],
+  );
 
   useEffect(() => {
     if (selected && !filtered.some(h => h.id === selected.id)) {
@@ -475,7 +644,7 @@ export default function MapScreen() {
     try {
       const payload = JSON.parse(event.nativeEvent.data);
       if (payload?.type === 'select') {
-        const hotspot = hotspots.find(h => h.id === payload.id);
+        const hotspot = filtered.find(h => h.id === payload.id);
         if (hotspot) {
           handleSelect(hotspot);
         }
@@ -510,10 +679,13 @@ export default function MapScreen() {
         onMessage={onMapMessage}
       />
 
-      {(isAppDataLoading || appDataError) && (
+      {(isAppDataLoading || appDataError || filtered.length === 0) && (
         <View style={styles.statusBanner}>
           <Text style={styles.statusText}>
-            {isAppDataLoading ? 'Loading map data...' : appDataError}
+            {isAppDataLoading
+              ? 'Loading map data...'
+              : appDataError ||
+                'No shared reports yet. Start driving to build the map.'}
           </Text>
         </View>
       )}

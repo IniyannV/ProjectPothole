@@ -23,7 +23,6 @@ export function DriveStackNavigator() {
         headerTintColor: colors.white,
         headerShadowVisible: false,
         headerTitle: '',
-        headerBackTitleVisible: false,
         gestureEnabled: false,
       }}
     >
