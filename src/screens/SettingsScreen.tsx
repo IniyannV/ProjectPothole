@@ -1,4 +1,4 @@
-import React, {useState, useCallback} from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,13 +8,13 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Slider from '@react-native-community/slider';
-import {useFocusEffect} from '@react-navigation/native';
-import {AppSettings} from '../types';
-import {StorageService} from '../services/StorageService';
-import {sensitivityToThreshold} from '../services/DetectionService';
-import {colors} from '../theme/colors';
+import { useFocusEffect } from '@react-navigation/native';
+import { AppSettings } from '../types';
+import { StorageService } from '../services/StorageService';
+import { sensitivityToThreshold } from '../services/DetectionService';
+import { colors } from '../theme/colors';
 
 const SENSITIVITY_LABELS = ['Low', 'Medium', 'High'];
 
@@ -30,7 +30,7 @@ interface RowProps {
   children: React.ReactNode;
 }
 
-function Row({label, subtitle, children}: RowProps) {
+function Row({ label, subtitle, children }: RowProps) {
   return (
     <View style={styles.row}>
       <View style={styles.rowText}>
@@ -44,16 +44,30 @@ function Row({label, subtitle, children}: RowProps) {
 
 export function SettingsScreen() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [sensitivityDraft, setSensitivityDraft] = useState<number>(0.5);
+  const [isSliding, setIsSliding] = useState(false);
+  const isSlidingRef = useRef(false);
 
   useFocusEffect(
     useCallback(() => {
-      StorageService.getSettings().then(setSettings);
+      StorageService.getSettings().then(next => {
+        setSettings(next);
+        if (!isSlidingRef.current) {
+          setSensitivityDraft(next.sensitivity);
+        }
+      });
     }, []),
   );
 
+  useEffect(() => {
+    if (settings && !isSlidingRef.current) {
+      setSensitivityDraft(settings.sensitivity);
+    }
+  }, [settings]);
+
   const update = async (patch: Partial<AppSettings>) => {
     if (!settings) return;
-    const updated = {...settings, ...patch};
+    const updated = { ...settings, ...patch };
     setSettings(updated);
     await StorageService.saveSettings(updated);
   };
@@ -63,13 +77,15 @@ export function SettingsScreen() {
       'Clear All History',
       'This will permanently delete all saved drives. This cannot be undone.',
       [
-        {text: 'Cancel', style: 'cancel'},
+        { text: 'Cancel', style: 'cancel' },
         {
           text: 'Clear All',
           style: 'destructive',
           onPress: async () => {
             const sessions = await StorageService.getSessions();
-            await Promise.all(sessions.map(s => StorageService.deleteSession(s.id)));
+            await Promise.all(
+              sessions.map(s => StorageService.deleteSession(s.id)),
+            );
             Alert.alert('Done', 'All drive history cleared.');
           },
         },
@@ -79,11 +95,29 @@ export function SettingsScreen() {
 
   if (!settings) return null;
 
-  const threshold = sensitivityToThreshold(settings.sensitivity).toFixed(1);
+  const threshold = sensitivityToThreshold(sensitivityDraft).toFixed(1);
+
+  const handleSlidingStart = () => {
+    isSlidingRef.current = true;
+    setIsSliding(true);
+  };
+
+  const handleSlidingComplete = (val: number) => {
+    isSlidingRef.current = false;
+    setIsSliding(false);
+    const clamped = Math.min(1, Math.max(0, val));
+    setSensitivityDraft(clamped);
+    update({ sensitivity: clamped });
+  };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <SafeAreaView style={styles.safe} edges={['left', 'right']}>
+      <ScrollView
+        scrollEnabled={!isSliding}
+        directionalLockEnabled
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.title}>Settings</Text>
 
         {/* Detection */}
@@ -93,17 +127,25 @@ export function SettingsScreen() {
             <View style={styles.sensitivityHeader}>
               <Text style={styles.rowLabel}>Sensitivity</Text>
               <Text style={styles.sensitivityValue}>
-                {getSensitivityLabel(settings.sensitivity)}
-                <Text style={styles.sensitivityThreshold}> · {threshold} m/s²</Text>
+                {getSensitivityLabel(sensitivityDraft)}
+                <Text style={styles.sensitivityThreshold}>
+                  {' '}
+                  · {threshold} m/s²
+                </Text>
               </Text>
             </View>
             <Slider
               style={styles.slider}
               minimumValue={0}
               maximumValue={1}
-              value={settings.sensitivity}
-              onValueChange={val => setSettings(prev => prev ? {...prev, sensitivity: val} : prev)}
-              onSlidingComplete={val => update({sensitivity: val})}
+              step={0.01}
+              value={sensitivityDraft}
+              tapToSeek
+              onSlidingStart={handleSlidingStart}
+              onValueChange={val => {
+                setSensitivityDraft(val);
+              }}
+              onSlidingComplete={handleSlidingComplete}
               minimumTrackTintColor={colors.primary}
               maximumTrackTintColor={colors.border}
               thumbTintColor={colors.white}
@@ -123,11 +165,12 @@ export function SettingsScreen() {
               settings.speedThresholdEnabled
                 ? `Detect only above ${settings.minSpeedMph} mph`
                 : 'Detect at any speed'
-            }>
+            }
+          >
             <Switch
               value={settings.speedThresholdEnabled}
-              onValueChange={val => update({speedThresholdEnabled: val})}
-              trackColor={{false: colors.border, true: colors.primary}}
+              onValueChange={val => update({ speedThresholdEnabled: val })}
+              trackColor={{ false: colors.border, true: colors.primary }}
               thumbColor={colors.white}
             />
           </Row>
@@ -137,9 +180,24 @@ export function SettingsScreen() {
         <Text style={styles.sectionHeader}>Detection Logic</Text>
         <View style={styles.group}>
           <View style={styles.infoBlock}>
-            <InfoRow icon="◉" label="Pothole" desc="Short vertical spike < 350ms" color={colors.pothole} />
-            <InfoRow icon="▲" label="Speed Bump" desc="Sustained vertical lift ≥ 350ms" color={colors.speedBump} />
-            <InfoRow icon="■" label="Hard Braking" desc="Dominant longitudinal deceleration" color={colors.hardBraking} />
+            <InfoRow
+              icon="◉"
+              label="Pothole"
+              desc="Short vertical spike < 350ms"
+              color={colors.pothole}
+            />
+            <InfoRow
+              icon="▲"
+              label="Speed Bump"
+              desc="Sustained vertical lift ≥ 350ms"
+              color={colors.speedBump}
+            />
+            <InfoRow
+              icon="■"
+              label="Hard Braking"
+              desc="Dominant longitudinal deceleration"
+              color={colors.hardBraking}
+            />
           </View>
           <View style={styles.divider} />
           <View style={styles.infoRow}>
@@ -155,7 +213,11 @@ export function SettingsScreen() {
         {/* Data */}
         <Text style={styles.sectionHeader}>Data</Text>
         <View style={styles.group}>
-          <TouchableOpacity style={styles.dangerRow} onPress={handleClearHistory} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={styles.dangerRow}
+            onPress={handleClearHistory}
+            activeOpacity={0.7}
+          >
             <Text style={styles.dangerText}>Clear All Drive History</Text>
           </TouchableOpacity>
         </View>
@@ -164,11 +226,21 @@ export function SettingsScreen() {
   );
 }
 
-function InfoRow({icon, label, desc, color}: {icon: string; label: string; desc: string; color: string}) {
+function InfoRow({
+  icon,
+  label,
+  desc,
+  color,
+}: {
+  icon: string;
+  label: string;
+  desc: string;
+  color: string;
+}) {
   return (
     <View style={styles.infoRow}>
-      <Text style={[styles.infoIcon, {color}]}>{icon}</Text>
-      <Text style={[styles.infoLabel, {color}]}>{label}</Text>
+      <Text style={[styles.infoIcon, { color }]}>{icon}</Text>
+      <Text style={[styles.infoLabel, { color }]}>{label}</Text>
       <Text style={styles.infoDesc}>{desc}</Text>
     </View>
   );
@@ -254,7 +326,7 @@ const styles = StyleSheet.create({
   },
   slider: {
     width: '100%',
-    height: 40,
+    height: 48,
   },
   sliderLabels: {
     flexDirection: 'row',

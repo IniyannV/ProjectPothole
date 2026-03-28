@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-type TabKey = 'home' | 'map' | 'drive' | 'settings';
+type TabKey = 'driving' | 'map' | 'settings';
 
 interface Tab {
   key: TabKey;
@@ -23,23 +23,20 @@ interface Tab {
 }
 
 const TABS: Tab[] = [
-  { key: 'home', label: 'Home', symbol: 'house.fill' },
+  { key: 'driving', label: 'Driving', symbol: 'exclamationmark.circle.fill' },
   { key: 'map', label: 'Map', symbol: 'map.fill' },
-  { key: 'drive', label: 'Drive', symbol: 'exclamationmark.circle.fill' },
   { key: 'settings', label: 'Settings', symbol: 'gearshape.fill' },
 ];
 
 const ROUTE_TO_TAB: Record<string, TabKey> = {
-  Home: 'home',
+  Driving: 'driving',
   Map: 'map',
-  Drive: 'drive',
   Settings: 'settings',
 };
 
 const TAB_TO_ROUTE: Record<TabKey, string> = {
-  home: 'Home',
+  driving: 'Driving',
   map: 'Map',
-  drive: 'Drive',
   settings: 'Settings',
 };
 
@@ -157,7 +154,7 @@ export default function GlassTabBar({
   const insets = useSafeAreaInsets();
 
   const activeRoute = state.routes[state.index];
-  const activeTab = ROUTE_TO_TAB[activeRoute.name] ?? 'home';
+  const activeTab = ROUTE_TO_TAB[activeRoute.name] ?? 'driving';
 
   const handleTabPress = (key: TabKey) => {
     const routeName = TAB_TO_ROUTE[key];

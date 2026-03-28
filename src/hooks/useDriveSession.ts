@@ -27,6 +27,10 @@ export function useDriveSession() {
       setSettings(s);
       settingsRef.current = s;
     });
+    const unsubscribeSettings = StorageService.subscribeSettings(next => {
+      setSettings(next);
+      settingsRef.current = next;
+    });
     StorageService.getActiveSession().then(s => {
       if (s) {
         setActiveSession(s);
@@ -34,7 +38,10 @@ export function useDriveSession() {
         startAccelerometer(s);
       }
     });
-    return () => stopAccelerometer();
+    return () => {
+      unsubscribeSettings();
+      stopAccelerometer();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

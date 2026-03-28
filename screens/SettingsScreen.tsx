@@ -221,13 +221,6 @@ const SettingsScreen: React.FC = () => {
               onValueChange={setSetting('notifications')}
             />
             <View style={styles.divider} />
-            <SettingToggle
-              icon="MT"
-              label="Model training"
-              sublabel="Contribute to improving AI detection"
-              value={settings.modelTraining}
-              onValueChange={setSetting('modelTraining')}
-            />
             <View style={styles.divider} />
             <SettingToggle
               icon="DB"

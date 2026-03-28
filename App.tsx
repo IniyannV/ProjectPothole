@@ -102,7 +102,7 @@ function App() {
             <View style={styles.glowOrbTop} />
             <View style={styles.glowOrbBottom} />
             <Tab.Navigator
-              initialRouteName="Home"
+              initialRouteName="Driving"
               tabBar={renderGlassTabBar}
               screenOptions={{
                 headerShown: false,
@@ -110,9 +110,8 @@ function App() {
                 tabBarHideOnKeyboard: true,
               }}
             >
-              <Tab.Screen name="Home" component={HomeScreen} />
+              <Tab.Screen name="Driving" component={DriveStackNavigator} />
               <Tab.Screen name="Map" component={MapScreen} />
-              <Tab.Screen name="Drive" component={DriveStackNavigator} />
               <Tab.Screen name="Settings" component={SettingsScreen} />
             </Tab.Navigator>
           </View>

@@ -1,4 +1,4 @@
-import React, {useState, useCallback} from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,11 +7,11 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
-import {useFocusEffect} from '@react-navigation/native';
-import {DriveSession, EventType} from '../types';
-import {StorageService} from '../services/StorageService';
-import {colors} from '../theme/colors';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
+import { DriveSession, EventType } from '../types';
+import { StorageService } from '../services/StorageService';
+import { colors } from '../theme/colors';
 
 const EVENT_COLOR: Record<EventType, string> = {
   POTHOLE: colors.pothole,
@@ -28,7 +28,10 @@ function formatDate(ts: number): string {
 }
 
 function formatTime(ts: number): string {
-  return new Date(ts).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+  return new Date(ts).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 function formatDuration(start: number, end: number | null): string {
@@ -42,20 +45,21 @@ interface SessionCardProps {
   onDelete: (id: string) => void;
 }
 
-function SessionCard({session, onDelete}: SessionCardProps) {
+function SessionCard({ session, onDelete }: SessionCardProps) {
   const confirmed = session.events.filter(e => e.confirmed !== false);
-  const counts = confirmed.reduce(
-    (acc, e) => {
-      const type = e.correctedType ?? e.type;
-      return {...acc, [type]: (acc[type] ?? 0) + 1};
-    },
-    {} as Record<string, number>,
-  );
+  const counts = confirmed.reduce((acc, e) => {
+    const type = e.correctedType ?? e.type;
+    return { ...acc, [type]: (acc[type] ?? 0) + 1 };
+  }, {} as Record<string, number>);
 
   const handleDelete = () => {
     Alert.alert('Delete Drive', 'Remove this drive from your history?', [
-      {text: 'Cancel', style: 'cancel'},
-      {text: 'Delete', style: 'destructive', onPress: () => onDelete(session.id)},
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => onDelete(session.id),
+      },
     ]);
   };
 
@@ -65,10 +69,14 @@ function SessionCard({session, onDelete}: SessionCardProps) {
         <View>
           <Text style={styles.cardDate}>{formatDate(session.startTime)}</Text>
           <Text style={styles.cardTime}>
-            {formatTime(session.startTime)} · {formatDuration(session.startTime, session.endTime)}
+            {formatTime(session.startTime)} ·{' '}
+            {formatDuration(session.startTime, session.endTime)}
           </Text>
         </View>
-        <TouchableOpacity onPress={handleDelete} hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}>
+        <TouchableOpacity
+          onPress={handleDelete}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
           <Text style={styles.deleteIcon}>⊖</Text>
         </TouchableOpacity>
       </View>
@@ -78,13 +86,26 @@ function SessionCard({session, onDelete}: SessionCardProps) {
         <Text style={styles.noEvents}>No confirmed events</Text>
       ) : (
         <View style={styles.countRow}>
-          {(Object.entries(counts) as [EventType, number][]).map(([type, count]) => (
-            <View key={type} style={styles.countChip}>
-              <View style={[styles.countDot, {backgroundColor: EVENT_COLOR[type]}]} />
-              <Text style={styles.countText}>{count}</Text>
-              <Text style={styles.countLabel}>{type === 'POTHOLE' ? 'Pothole' : type === 'SPEED_BUMP' ? 'Speed Bump' : 'Hard Braking'}</Text>
-            </View>
-          ))}
+          {(Object.entries(counts) as [EventType, number][]).map(
+            ([type, count]) => (
+              <View key={type} style={styles.countChip}>
+                <View
+                  style={[
+                    styles.countDot,
+                    { backgroundColor: EVENT_COLOR[type] },
+                  ]}
+                />
+                <Text style={styles.countText}>{count}</Text>
+                <Text style={styles.countLabel}>
+                  {type === 'POTHOLE'
+                    ? 'Pothole'
+                    : type === 'SPEED_BUMP'
+                    ? 'Speed Bump'
+                    : 'Hard Braking'}
+                </Text>
+              </View>
+            ),
+          )}
         </View>
       )}
 
@@ -117,16 +138,18 @@ export function HistoryScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={styles.safe} edges={['left', 'right']}>
       <View style={styles.header}>
         <Text style={styles.title}>History</Text>
-        <Text style={styles.subtitle}>{sessions.length} drive{sessions.length !== 1 ? 's' : ''}</Text>
+        <Text style={styles.subtitle}>
+          {sessions.length} drive{sessions.length !== 1 ? 's' : ''}
+        </Text>
       </View>
 
       <FlatList
         data={sessions}
         keyExtractor={item => item.id}
-        renderItem={({item}) => (
+        renderItem={({ item }) => (
           <SessionCard session={item} onDelete={handleDelete} />
         )}
         contentContainerStyle={styles.list}
@@ -134,7 +157,9 @@ export function HistoryScreen() {
           <View style={styles.emptyState}>
             <Text style={styles.emptyIcon}>◎</Text>
             <Text style={styles.emptyTitle}>No Drives Yet</Text>
-            <Text style={styles.emptyText}>Start a drive from the home tab to begin tracking.</Text>
+            <Text style={styles.emptyText}>
+              Start a drive from the home tab to begin tracking.
+            </Text>
           </View>
         }
         showsVerticalScrollIndicator={false}

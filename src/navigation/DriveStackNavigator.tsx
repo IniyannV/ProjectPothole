@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { HomeScreen as DriveHomeScreen } from '../screens/HomeScreen';
 import { HistoryScreen as DriveHistoryScreen } from '../screens/HistoryScreen';
 import { SettingsScreen as DriveSettingsScreen } from '../screens/SettingsScreen';
+import { colors } from '../theme/colors';
 
 export type DriveStackParamList = {
   DriveHome: undefined;
@@ -17,23 +18,29 @@ export function DriveStackNavigator() {
     <Stack.Navigator
       initialRouteName="DriveHome"
       screenOptions={{
+        headerTransparent: false,
+        headerStyle: { backgroundColor: colors.background },
+        headerTintColor: colors.white,
         headerShadowVisible: false,
+        headerTitle: '',
+        headerBackTitleVisible: false,
+        gestureEnabled: false,
       }}
     >
       <Stack.Screen
         name="DriveHome"
         component={DriveHomeScreen}
-        options={{ title: 'Start Drive' }}
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="DriveHistory"
         component={DriveHistoryScreen}
-        options={{ title: 'Drive History' }}
+        options={{ title: '' }}
       />
       <Stack.Screen
         name="DriveSettings"
         component={DriveSettingsScreen}
-        options={{ title: 'Drive Settings' }}
+        options={{ title: '' }}
       />
     </Stack.Navigator>
   );

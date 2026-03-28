@@ -7,7 +7,10 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useDriveSession } from '../hooks/useDriveSession';
@@ -33,6 +36,7 @@ function formatDuration(startTime: number): string {
 }
 
 export function HomeScreen() {
+  const insets = useSafeAreaInsets();
   const navigation =
     useNavigation<NativeStackNavigationProp<DriveStackParamList>>();
   const {
@@ -89,7 +93,7 @@ export function HomeScreen() {
     : {};
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={styles.safe} edges={['left', 'right']}>
       <DetectionBanner event={lastEvent} onDismiss={dismissLastEvent} />
 
       <ScrollView
@@ -97,7 +101,7 @@ export function HomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <Text style={styles.appTitle}>PotholeSense</Text>
+        <Text style={styles.appTitle}> </Text>
 
         <View style={styles.quickActionsRow}>
           <TouchableOpacity
@@ -197,7 +201,9 @@ export function HomeScreen() {
         )}
 
         {/* CTA */}
-        <View style={styles.ctaContainer}>
+        <View
+          style={[styles.ctaContainer, { paddingBottom: insets.bottom + 88 }]}
+        >
           {!activeSession ? (
             <TouchableOpacity
               style={styles.startButton}
