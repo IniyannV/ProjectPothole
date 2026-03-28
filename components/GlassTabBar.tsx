@@ -6,10 +6,10 @@ import {
   Platform,
   Dimensions,
   Animated,
-  ImageSourcePropType,
 } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { BlurView } from '@react-native-community/blur';
+import { SFSymbol } from 'react-native-sfsymbols';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -19,18 +19,14 @@ type TabKey = 'home' | 'map' | 'info' | 'settings';
 interface Tab {
   key: TabKey;
   label: string;
-  logo: ImageSourcePropType;
+  symbol: string;
 }
 
 const TABS: Tab[] = [
-  { key: 'home', label: 'Home', logo: require('../logos/home.png') },
-  { key: 'map', label: 'Map', logo: require('../logos/map.png') },
-  { key: 'info', label: 'Info', logo: require('../logos/info.png') },
-  {
-    key: 'settings',
-    label: 'Settings',
-    logo: require('../logos/settings.png'),
-  },
+  { key: 'home', label: 'Home', symbol: 'house.fill' },
+  { key: 'map', label: 'Map', symbol: 'map.fill' },
+  { key: 'info', label: 'Info', symbol: 'info.circle.fill' },
+  { key: 'settings', label: 'Settings', symbol: 'gearshape.fill' },
 ];
 
 const ROUTE_TO_TAB: Record<string, TabKey> = {
@@ -147,10 +143,13 @@ function TabItem({
             },
           ]}
         >
-          <Animated.Image
-            source={tab.logo}
-            style={[styles.logoImage, !isActive && styles.logoInactive]}
-            resizeMode="contain"
+          <SFSymbol
+            name={tab.symbol}
+            size={21}
+            weight="semibold"
+            scale="medium"
+            color={isActive ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.60)'}
+            style={styles.symbolIcon}
           />
         </Animated.View>
 
@@ -337,13 +336,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  logoImage: {
+  symbolIcon: {
     width: 21,
     height: 21,
-  },
-
-  logoInactive: {
-    opacity: 0.6,
   },
 
   label: {
