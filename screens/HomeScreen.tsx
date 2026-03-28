@@ -16,7 +16,10 @@ export default function HomeScreen() {
   const { userData, isAppDataLoading, appDataError } = useAppData();
   const [dismissed, setDismissed] = useState<string[]>([]);
 
-  const detections = userData?.recentDetections ?? [];
+  const detections = useMemo(
+    () => userData?.recentDetections ?? [],
+    [userData?.recentDetections],
+  );
   const stats = userData?.stats ?? DEFAULT_USER_STATS;
 
   const visible = useMemo(

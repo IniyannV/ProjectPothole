@@ -20,7 +20,6 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import GlassTabBar from './components/GlassTabBar';
 import { AppDataProvider } from './context/AppDataContext';
 import AuthScreen from './screens/AuthScreen';
-import HomeScreen from './screens/HomeScreen';
 import MapScreen from './screens/MapScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import { DriveStackNavigator } from './src/navigation/DriveStackNavigator';
@@ -73,6 +72,7 @@ function App() {
   if (isAuthInitializing) {
     return (
       <SafeAreaProvider>
+        <StatusBar barStyle="light-content" />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#2563eb" />
         </View>
@@ -83,7 +83,7 @@ function App() {
   if (!user) {
     return (
       <SafeAreaProvider>
-        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+        <StatusBar barStyle="light-content" />
         <AuthScreen
           isSigningIn={isSigningIn}
           errorMessage={authError}
@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#eaf1fb',
+    backgroundColor: '#05070b',
   },
   appContainer: {
     flex: 1,

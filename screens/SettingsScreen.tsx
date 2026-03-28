@@ -17,6 +17,10 @@ import {
   DEFAULT_USER_STATS,
   UserSettings,
 } from '../services/userData';
+import {
+  DEMO_MAP_LOCATIONS,
+  DemoMapLocationId,
+} from '../src/constants/demoLocations';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -62,7 +66,6 @@ const SettingsScreen: React.FC = () => {
   const settings = userData?.settings ?? DEFAULT_USER_SETTINGS;
   const stats = userData?.stats ?? DEFAULT_USER_STATS;
   const displayName = userData?.name ?? 'Loading Profile';
-  const profileRole = userData?.profileRole ?? 'Road Contributor · Level 1';
 
   const initials = displayName
     .split(' ')
@@ -92,6 +95,17 @@ const SettingsScreen: React.FC = () => {
       });
     } catch {
       Alert.alert('Save Failed', 'Unable to update sensitivity right now.');
+    }
+  };
+
+  const setDemoMapLocation = async (demoMapLocation: DemoMapLocationId) => {
+    try {
+      await saveSettings({
+        ...settings,
+        demoMapLocation,
+      });
+    } catch {
+      Alert.alert('Save Failed', 'Unable to update demo location right now.');
     }
   };
 
@@ -221,16 +235,50 @@ const SettingsScreen: React.FC = () => {
               onValueChange={setSetting('notifications')}
             />
             <View style={styles.divider} />
-            <View style={styles.divider} />
-            <SettingToggle
+            {/* <SettingToggle
               icon="DB"
               label="Debug mode"
               sublabel="Show sensor data overlay on map"
               value={settings.debugMode}
               onValueChange={setSetting('debugMode')}
-            />
+            /> */}
           </View>
         </View>
+
+        {settings.debugMode ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>DEVELOPER DEMO</Text>
+            <View style={styles.card}>
+              <View style={styles.demoLocationWrap}>
+                {DEMO_MAP_LOCATIONS.map(location => (
+                  <TouchableOpacity
+                    key={location.id}
+                    style={[
+                      styles.demoLocationChip,
+                      settings.demoMapLocation === location.id &&
+                        styles.demoLocationChipActive,
+                    ]}
+                    onPress={() => setDemoMapLocation(location.id)}
+                    activeOpacity={0.8}
+                  >
+                    <Text
+                      style={[
+                        styles.demoLocationChipText,
+                        settings.demoMapLocation === location.id &&
+                          styles.demoLocationChipTextActive,
+                      ]}
+                    >
+                      {location.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={styles.demoHintText}>
+                Debug mode can pin the map to a demo city for presentations.
+              </Text>
+            </View>
+          </View>
+        ) : null}
 
         {/* ── Sensitivity Selector ── */}
         <View style={styles.section}>
@@ -554,6 +602,39 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 14,
     lineHeight: 16,
+  },
+  demoLocationWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    padding: 12,
+  },
+  demoLocationChip: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: '#232325',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  demoLocationChipActive: {
+    backgroundColor: BLUE,
+    borderColor: BLUE,
+  },
+  demoLocationChipText: {
+    color: TEXT_SECONDARY,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  demoLocationChipTextActive: {
+    color: '#FFFFFF',
+  },
+  demoHintText: {
+    color: TEXT_SECONDARY,
+    fontSize: 11,
+    lineHeight: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 14,
   },
 
   // Action buttons

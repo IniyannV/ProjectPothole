@@ -8,6 +8,11 @@ import {
   setDoc,
 } from 'firebase/firestore';
 import { getFirebaseApp } from './firebaseAuth';
+import {
+  DEFAULT_DEMO_MAP_LOCATION_ID,
+  DemoMapLocationId,
+  isDemoMapLocationId,
+} from '../src/constants/demoLocations';
 
 type AuthUserIdentity = Pick<User, 'uid' | 'displayName' | 'email'>;
 
@@ -46,6 +51,7 @@ export type UserSettings = {
   sensingDriving: boolean;
   notifications: boolean;
   debugMode: boolean;
+  demoMapLocation: DemoMapLocationId;
   modelTraining: boolean;
   hapticFeedback: boolean;
   autoReport: boolean;
@@ -84,6 +90,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   sensingDriving: false,
   notifications: true,
   debugMode: true,
+  demoMapLocation: DEFAULT_DEMO_MAP_LOCATION_ID,
   modelTraining: true,
   hapticFeedback: true,
   autoReport: false,
@@ -284,6 +291,9 @@ function normalizeUserData(authUser: AuthUserIdentity, raw: unknown): UserAppDat
         typeof sourceSettings?.debugMode === 'boolean'
           ? sourceSettings.debugMode
           : DEFAULT_USER_SETTINGS.debugMode,
+      demoMapLocation: isDemoMapLocationId(sourceSettings?.demoMapLocation)
+        ? sourceSettings.demoMapLocation
+        : DEFAULT_USER_SETTINGS.demoMapLocation,
       modelTraining:
         typeof sourceSettings?.modelTraining === 'boolean'
           ? sourceSettings.modelTraining

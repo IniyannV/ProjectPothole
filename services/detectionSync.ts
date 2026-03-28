@@ -8,7 +8,11 @@ import {
   increment,
   runTransaction,
 } from 'firebase/firestore';
-import { CommunityHotspot, HotspotType } from './userData';
+import { CommunityHotspot, HotspotType, UserSettings } from './userData';
+import {
+  DEFAULT_DEMO_MAP_LOCATION_ID,
+  DEMO_MAP_LOCATIONS,
+} from '../src/constants/demoLocations';
 
 const HOTSPOTS_COLLECTION = 'hotspots';
 const USERS_COLLECTION = 'users';
@@ -195,9 +199,43 @@ function toEventWithCoord(event: DetectionEvent): EventWithCoord | null {
   };
 }
 
+function resolveReportedCoord(
+  eventCoord: [number, number],
+  settings: UserSettings,
+): [number, number] {
+  const shouldUseDemoCoord =
+    settings.debugMode && settings.demoMapLocation !== DEFAULT_DEMO_MAP_LOCATION_ID;
+
+  if (!shouldUseDemoCoord) {
+    return eventCoord;
+  }
+
+  const selectedLocation = DEMO_MAP_LOCATIONS.find(
+    location => location.id === settings.demoMapLocation,
+  );
+
+  return selectedLocation?.coord ?? eventCoord;
+}
+
+function mapEventToReportedCoord(
+  event: DetectionEvent,
+  settings: UserSettings,
+): EventWithCoord | null {
+  const normalized = toEventWithCoord(event);
+  if (!normalized) {
+    return null;
+  }
+
+  return {
+    ...normalized,
+    coord: resolveReportedCoord(normalized.coord, settings),
+  };
+}
+
 export async function syncReviewedSessionToFirestore(
   uid: string,
   session: DriveSession,
+  settings: UserSettings,
 ): Promise<void> {
   const db = getFirestore(getFirebaseApp());
   const userDocRef = doc(db, USERS_COLLECTION, uid);
@@ -205,7 +243,7 @@ export async function syncReviewedSessionToFirestore(
 
   const confirmedEvents = session.events
     .filter(event => event.confirmed === true)
-    .map(toEventWithCoord)
+    .map(event => mapEventToReportedCoord(event, settings))
     .filter((event): event is EventWithCoord => event != null);
 
   const groups = buildGroups(confirmedEvents);

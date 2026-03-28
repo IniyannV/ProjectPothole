@@ -17,6 +17,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { useAppData } from '../context/AppDataContext';
 import { CommunityHotspot } from '../services/userData';
+import {
+  DEFAULT_DEMO_MAP_LOCATION_ID,
+  DEMO_MAP_LOCATIONS,
+} from '../src/constants/demoLocations';
 
 type FilterKey = 'all' | 'pothole' | 'rough' | 'good' | 'monitored';
 
@@ -430,7 +434,8 @@ function makeMapHtml(hotspots: Hotspot[], selectedId: string | null) {
 }
 
 export default function MapScreen() {
-  const { communityHotspots, isAppDataLoading, appDataError } = useAppData();
+  const { communityHotspots, isAppDataLoading, appDataError, userData } =
+    useAppData();
   const insets = useSafeAreaInsets();
   const webViewRef = useRef<WebView>(null);
   const hasCenteredOnUserRef = useRef(false);
@@ -448,6 +453,16 @@ export default function MapScreen() {
     () => groupNearbyHotspots(communityHotspots.map(coerceHotspot)),
     [communityHotspots],
   );
+  const debugModeEnabled = userData?.settings.debugMode ?? false;
+  const demoMapLocationId =
+    userData?.settings.demoMapLocation ?? DEFAULT_DEMO_MAP_LOCATION_ID;
+  const selectedDemoLocation = useMemo(
+    () =>
+      DEMO_MAP_LOCATIONS.find(location => location.id === demoMapLocationId),
+    [demoMapLocationId],
+  );
+  const shouldUseDemoLocation =
+    debugModeEnabled && demoMapLocationId !== DEFAULT_DEMO_MAP_LOCATION_ID;
 
   const filtered = useMemo(
     () => hotspots.filter(h => filter === 'all' || h.type === filter),
@@ -467,6 +482,13 @@ export default function MapScreen() {
   );
 
   useEffect(() => {
+    if (shouldUseDemoLocation && selectedDemoLocation) {
+      hasCenteredOnUserRef.current = false;
+      setLocationStatus('live');
+      setUserLocation(selectedDemoLocation.coord);
+      return;
+    }
+
     let watchId: number | null = null;
     let isMounted = true;
 
@@ -604,7 +626,7 @@ export default function MapScreen() {
       }
       Geolocation.stopObserving();
     };
-  }, []);
+  }, [selectedDemoLocation, shouldUseDemoLocation]);
 
   useEffect(() => {
     if (!isMapReady || !webViewRef.current || !userLocation) {
@@ -696,7 +718,7 @@ export default function MapScreen() {
         style={[styles.filtersRow, { top: insets.top + 8 }]}
         contentContainerStyle={styles.scrollContent}
       >
-        {filters.map(f => (
+        {/* {filters.map(f => (
           <TouchableOpacity
             key={f.key}
             onPress={() => setFilter(f.key)}
@@ -707,7 +729,7 @@ export default function MapScreen() {
                 borderColor: f.color + '88',
               },
             ]}
-          >
+          > */}
             <Text
               style={[
                 styles.filterText,
@@ -721,6 +743,33 @@ export default function MapScreen() {
           </TouchableOpacity>
         ))}
       </ScrollView>
+
+      <View style={[styles.gpsBadge, { top: insets.top + 56 }]}>
+        <Text
+          style={[
+            styles.gpsText,
+            shouldUseDemoLocation
+              ? styles.gpsDemo
+              : locationStatus === 'live'
+              ? styles.gpsLive
+              : locationStatus === 'locating'
+              ? styles.gpsLocating
+              : locationStatus === 'denied'
+              ? styles.gpsDenied
+              : styles.gpsError,
+          ]}
+        >
+          {shouldUseDemoLocation
+            ? `Demo: ${selectedDemoLocation?.label ?? 'Selected'}`
+            : locationStatus === 'live'
+            ? 'Live GPS'
+            : locationStatus === 'locating'
+            ? 'Locating...'
+            : locationStatus === 'denied'
+            ? 'Location blocked'
+            : 'Location unavailable'}
+        </Text>
+      </View>
 
       {selected && (
         <Animated.View
@@ -841,6 +890,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   gpsLive: { color: '#66D67A' },
+  gpsDemo: { color: '#64B5FF' },
   gpsLocating: { color: '#F3BE63' },
   gpsDenied: { color: '#E24B4A' },
   gpsError: { color: '#EF9F27' },

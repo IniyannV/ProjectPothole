@@ -9,6 +9,7 @@ import React, {
 import { User } from 'firebase/auth';
 import {
   CommunityHotspot,
+  DEFAULT_USER_SETTINGS,
   UserAppData,
   UserSettings,
   ensureUserDataInitialized,
@@ -88,10 +89,12 @@ export function AppDataProvider({ user, children }: AppDataProviderProps) {
 
   const syncReviewedSession = useCallback(
     async (session: DriveSession) => {
-      await syncReviewedSessionToFirestore(user.uid, session);
+      const settings = userData?.settings ?? DEFAULT_USER_SETTINGS;
+
+      await syncReviewedSessionToFirestore(user.uid, session, settings);
       await refreshUserData();
     },
-    [refreshUserData, user.uid],
+    [refreshUserData, user.uid, userData?.settings],
   );
 
   const value = useMemo(
