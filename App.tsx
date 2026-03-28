@@ -21,9 +21,9 @@ import GlassTabBar from './components/GlassTabBar';
 import { AppDataProvider } from './context/AppDataContext';
 import AuthScreen from './screens/AuthScreen';
 import HomeScreen from './screens/HomeScreen';
-import InfoScreen from './screens/InfoScreen';
 import MapScreen from './screens/MapScreen';
 import SettingsScreen from './screens/SettingsScreen';
+import { DriveStackNavigator } from './src/navigation/DriveStackNavigator';
 import {
   configureGoogleSignIn,
   observeAuthState,
@@ -112,7 +112,7 @@ function App() {
             >
               <Tab.Screen name="Home" component={HomeScreen} />
               <Tab.Screen name="Map" component={MapScreen} />
-              {/* <Tab.Screen name="Info" component={InfoScreen} /> */}
+              <Tab.Screen name="Drive" component={DriveStackNavigator} />
               <Tab.Screen name="Settings" component={SettingsScreen} />
             </Tab.Navigator>
           </View>

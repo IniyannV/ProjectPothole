@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-type TabKey = 'home' | 'map' | 'settings';
+type TabKey = 'home' | 'map' | 'drive' | 'settings';
 
 interface Tab {
   key: TabKey;
@@ -25,20 +25,21 @@ interface Tab {
 const TABS: Tab[] = [
   { key: 'home', label: 'Home', symbol: 'house.fill' },
   { key: 'map', label: 'Map', symbol: 'map.fill' },
+  { key: 'drive', label: 'Drive', symbol: 'exclamationmark.circle.fill' },
   { key: 'settings', label: 'Settings', symbol: 'gearshape.fill' },
 ];
 
 const ROUTE_TO_TAB: Record<string, TabKey> = {
   Home: 'home',
   Map: 'map',
-  Info: 'info',
+  Drive: 'drive',
   Settings: 'settings',
 };
 
 const TAB_TO_ROUTE: Record<TabKey, string> = {
   home: 'Home',
   map: 'Map',
-  info: 'Info',
+  drive: 'Drive',
   settings: 'Settings',
 };
 
@@ -96,16 +97,6 @@ function TabItem({
     outputRange: [0.6, 1],
   });
 
-  const labelOpacity = glow.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.45, 1],
-  });
-
-  const labelTranslateY = glow.interpolate({
-    inputRange: [0, 1],
-    outputRange: [4, 0],
-  });
-
   const iconScale = glow.interpolate({
     inputRange: [0, 1],
     outputRange: [1, 1.14],
@@ -153,19 +144,6 @@ function TabItem({
             style={styles.symbolIcon}
           />
         </Animated.View>
-
-        <Animated.Text
-          style={[
-            styles.label,
-            isActive && styles.labelActive,
-            {
-              opacity: labelOpacity,
-              transform: [{ translateY: labelTranslateY }],
-            },
-          ]}
-        >
-          {tab.label}
-        </Animated.Text>
       </TouchableOpacity>
     </Animated.View>
   );
