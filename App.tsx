@@ -5,20 +5,16 @@
  * @format
  */
 
-import { createNativeBottomTabNavigator } from '@bottom-tabs/react-navigation';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer } from '@react-navigation/native';
-import { UIManager, StatusBar, useColorScheme } from 'react-native';
+import { StatusBar, useColorScheme } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import HomeScreen from './screens/HomeScreen';
 import InfoScreen from './screens/InfoScreen';
 import MapScreen from './screens/MapScreen';
 import SettingsScreen from './screens/SettingsScreen';
 
-const hasNativeBottomTabs = !!UIManager.getViewManagerConfig?.('RNCTabView');
-const Tab = hasNativeBottomTabs
-  ? createNativeBottomTabNavigator()
-  : createBottomTabNavigator();
+const Tab = createBottomTabNavigator();
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
