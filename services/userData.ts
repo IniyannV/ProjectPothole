@@ -44,6 +44,11 @@ export type CommunityHotspot = {
   cost: string;
   color: string;
   coord: [number, number];
+  avgMagnitude?: number;
+  peakMagnitude?: number;
+  avgSpeedMph?: number;
+  estimatedPotholeSizeCm?: number;
+  estimatedRepairCostUsd?: number;
   updatedAtMs: number;
 };
 
@@ -211,6 +216,20 @@ function sanitizeCommunityHotspot(
         ? item.color
         : '#E24B4A',
     coord: [item.coord[0], item.coord[1]],
+    avgMagnitude:
+      typeof item.avgMagnitude === 'number' ? item.avgMagnitude : undefined,
+    peakMagnitude:
+      typeof item.peakMagnitude === 'number' ? item.peakMagnitude : undefined,
+    avgSpeedMph:
+      typeof item.avgSpeedMph === 'number' ? item.avgSpeedMph : undefined,
+    estimatedPotholeSizeCm:
+      typeof item.estimatedPotholeSizeCm === 'number'
+        ? item.estimatedPotholeSizeCm
+        : undefined,
+    estimatedRepairCostUsd:
+      typeof item.estimatedRepairCostUsd === 'number'
+        ? item.estimatedRepairCostUsd
+        : undefined,
     updatedAtMs:
       typeof item.updatedAtMs === 'number' ? item.updatedAtMs : Date.now(),
   };

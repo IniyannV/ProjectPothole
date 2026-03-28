@@ -27,6 +27,11 @@ type SessionGroup = {
   reports: number;
   severity: Severity;
   type: HotspotType;
+  avgMagnitude: number;
+  peakMagnitude: number;
+  avgSpeedMph: number;
+  estimatedPotholeSizeCm: number;
+  estimatedRepairCostUsd: number;
 };
 
 type ExistingHotspot = {
@@ -35,6 +40,16 @@ type ExistingHotspot = {
   reports: number;
   severity: Severity;
   type: HotspotType;
+  avgMagnitude: number;
+  peakMagnitude: number;
+  avgSpeedMph: number;
+  estimatedPotholeSizeCm: number;
+  estimatedRepairCostUsd: number;
+};
+
+type PotholeEstimate = {
+  estimatedPotholeSizeCm: number;
+  estimatedRepairCostUsd: number;
 };
 
 function toRad(value: number): number {
@@ -109,8 +124,69 @@ function severityToColor(severity: Severity): string {
   return '#378ADD';
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function severityToMagnitudeFallback(severity: Severity): number {
+  if (severity === 'high') {
+    return 5.6;
+  }
+
+  if (severity === 'medium') {
+    return 3.6;
+  }
+
+  return 2.2;
+}
+
+function estimatePotholeFromSignals(
+  severity: Severity,
+  reports: number,
+  avgMagnitude: number,
+  avgSpeedMph: number,
+): PotholeEstimate {
+  const safeReports = Math.max(1, reports);
+  const safeMagnitude = clamp(avgMagnitude, 0.5, 14);
+  const safeSpeed = clamp(avgSpeedMph, 0, 80);
+
+  const reportMultiplier = 1 + Math.log1p(safeReports) * 0.14;
+  const baseSizeCm = safeMagnitude * 4.2 + safeSpeed * 0.32;
+  const severityBias =
+    severity === 'high' ? 8.5 : severity === 'medium' ? 4.5 : 2.5;
+  const estimatedPotholeSizeCm = clamp(
+    (baseSizeCm + severityBias) * reportMultiplier,
+    8,
+    170,
+  );
+
+  const severityCostBias =
+    severity === 'high' ? 320 : severity === 'medium' ? 180 : 90;
+  const estimatedRepairCostUsd = clamp(
+    120 + estimatedPotholeSizeCm * 43 + severityCostBias,
+    120,
+    15000,
+  );
+
+  return {
+    estimatedPotholeSizeCm,
+    estimatedRepairCostUsd,
+  };
+}
+
+function formatUsd(value: number): string {
+  const rounded = Math.round(value);
+  if (rounded >= 1000) {
+    return `$${(rounded / 1000).toFixed(1)}k`;
+  }
+
+  return `$${rounded}`;
+}
+
 function buildGroups(events: EventWithCoord[]): SessionGroup[] {
-  const groups: SessionGroup[] = [];
+  const groups: Array<
+    Omit<SessionGroup, 'estimatedPotholeSizeCm' | 'estimatedRepairCostUsd'>
+  > = [];
 
   events.forEach(event => {
     const effectiveType = event.correctedType ?? event.type;
@@ -129,22 +205,38 @@ function buildGroups(events: EventWithCoord[]): SessionGroup[] {
     });
 
     if (nearestIndex === -1) {
+      const speedMph =
+        typeof event.speedMph === 'number' && Number.isFinite(event.speedMph)
+          ? Math.max(0, event.speedMph)
+          : 0;
       groups.push({
         coord: event.coord,
         reports: 1,
         severity,
         type: hotspotType,
+        avgMagnitude: event.magnitude,
+        peakMagnitude: event.magnitude,
+        avgSpeedMph: speedMph,
       });
       return;
     }
 
     const target = groups[nearestIndex];
     const nextReports = target.reports + 1;
+    const speedMph =
+      typeof event.speedMph === 'number' && Number.isFinite(event.speedMph)
+        ? Math.max(0, event.speedMph)
+        : 0;
 
     target.coord = [
       (target.coord[0] * target.reports + event.coord[0]) / nextReports,
       (target.coord[1] * target.reports + event.coord[1]) / nextReports,
     ];
+    target.avgMagnitude =
+      (target.avgMagnitude * target.reports + event.magnitude) / nextReports;
+    target.peakMagnitude = Math.max(target.peakMagnitude, event.magnitude);
+    target.avgSpeedMph =
+      (target.avgSpeedMph * target.reports + speedMph) / nextReports;
     target.reports = nextReports;
     const targetSeverityRank = severityRank(target.severity);
     target.severity = strongestSeverity(target.severity, severity);
@@ -154,7 +246,20 @@ function buildGroups(events: EventWithCoord[]): SessionGroup[] {
         : target.type;
   });
 
-  return groups;
+  return groups.map(group => {
+    const estimate = estimatePotholeFromSignals(
+      group.severity,
+      group.reports,
+      group.avgMagnitude,
+      group.avgSpeedMph,
+    );
+
+    return {
+      ...group,
+      estimatedPotholeSizeCm: estimate.estimatedPotholeSizeCm,
+      estimatedRepairCostUsd: estimate.estimatedRepairCostUsd,
+    };
+  });
 }
 
 function makeHotspotName(type: HotspotType, severity: Severity): string {
@@ -276,6 +381,23 @@ export async function syncReviewedSessionToFirestore(
         reports: raw.reports,
         severity: raw.severity,
         type: raw.type,
+        avgMagnitude:
+          typeof raw.avgMagnitude === 'number'
+            ? raw.avgMagnitude
+            : severityToMagnitudeFallback(raw.severity),
+        peakMagnitude:
+          typeof raw.peakMagnitude === 'number'
+            ? raw.peakMagnitude
+            : severityToMagnitudeFallback(raw.severity),
+        avgSpeedMph: typeof raw.avgSpeedMph === 'number' ? raw.avgSpeedMph : 28,
+        estimatedPotholeSizeCm:
+          typeof raw.estimatedPotholeSizeCm === 'number'
+            ? raw.estimatedPotholeSizeCm
+            : 0,
+        estimatedRepairCostUsd:
+          typeof raw.estimatedRepairCostUsd === 'number'
+            ? raw.estimatedRepairCostUsd
+            : 0,
       };
     })
     .filter((item): item is ExistingHotspot => item != null);
@@ -329,6 +451,23 @@ export async function syncReviewedSessionToFirestore(
             severityRank(group.severity) > severityRank(target.severity)
               ? group.type
               : target.type;
+          const nextAvgMagnitude =
+            (target.avgMagnitude * target.reports +
+              group.avgMagnitude * group.reports) /
+            nextReports;
+          const nextPeakMagnitude = Math.max(
+            target.peakMagnitude,
+            group.peakMagnitude,
+          );
+          const nextAvgSpeedMph =
+            (target.avgSpeedMph * target.reports + group.avgSpeedMph * group.reports) /
+            nextReports;
+          const nextEstimate = estimatePotholeFromSignals(
+            nextSeverity,
+            nextReports,
+            nextAvgMagnitude,
+            nextAvgSpeedMph,
+          );
 
           const hotspotRef = doc(db, HOTSPOTS_COLLECTION, target.id);
           transaction.set(
@@ -339,7 +478,17 @@ export async function syncReviewedSessionToFirestore(
               severity: nextSeverity,
               type: nextType,
               name: makeHotspotName(nextType, nextSeverity),
+              cost: formatUsd(nextEstimate.estimatedRepairCostUsd),
               color: severityToColor(nextSeverity),
+              avgMagnitude: Number(nextAvgMagnitude.toFixed(3)),
+              peakMagnitude: Number(nextPeakMagnitude.toFixed(3)),
+              avgSpeedMph: Number(nextAvgSpeedMph.toFixed(2)),
+              estimatedPotholeSizeCm: Number(
+                nextEstimate.estimatedPotholeSizeCm.toFixed(1),
+              ),
+              estimatedRepairCostUsd: Number(
+                nextEstimate.estimatedRepairCostUsd.toFixed(0),
+              ),
               updatedAtMs: now,
             },
             { merge: true },
@@ -349,17 +498,37 @@ export async function syncReviewedSessionToFirestore(
           target.reports = nextReports;
           target.severity = nextSeverity;
           target.type = nextType;
+          target.avgMagnitude = nextAvgMagnitude;
+          target.peakMagnitude = nextPeakMagnitude;
+          target.avgSpeedMph = nextAvgSpeedMph;
+          target.estimatedPotholeSizeCm = nextEstimate.estimatedPotholeSizeCm;
+          target.estimatedRepairCostUsd = nextEstimate.estimatedRepairCostUsd;
           return;
         }
 
         const newDocRef = doc(collection(db, HOTSPOTS_COLLECTION));
+        const groupEstimate = estimatePotholeFromSignals(
+          group.severity,
+          group.reports,
+          group.avgMagnitude,
+          group.avgSpeedMph,
+        );
         transaction.set(newDocRef, {
           name: makeHotspotName(group.type, group.severity),
           type: group.type,
           severity: group.severity,
           reports: group.reports,
-          cost: '$2.3k',
+          cost: formatUsd(groupEstimate.estimatedRepairCostUsd),
           color: severityToColor(group.severity),
+          avgMagnitude: Number(group.avgMagnitude.toFixed(3)),
+          peakMagnitude: Number(group.peakMagnitude.toFixed(3)),
+          avgSpeedMph: Number(group.avgSpeedMph.toFixed(2)),
+          estimatedPotholeSizeCm: Number(
+            groupEstimate.estimatedPotholeSizeCm.toFixed(1),
+          ),
+          estimatedRepairCostUsd: Number(
+            groupEstimate.estimatedRepairCostUsd.toFixed(0),
+          ),
           coord: group.coord,
           updatedAtMs: now,
           createdAtMs: now,
@@ -372,6 +541,11 @@ export async function syncReviewedSessionToFirestore(
           reports: group.reports,
           severity: group.severity,
           type: group.type,
+          avgMagnitude: group.avgMagnitude,
+          peakMagnitude: group.peakMagnitude,
+          avgSpeedMph: group.avgSpeedMph,
+          estimatedPotholeSizeCm: groupEstimate.estimatedPotholeSizeCm,
+          estimatedRepairCostUsd: groupEstimate.estimatedRepairCostUsd,
         });
       });
     }

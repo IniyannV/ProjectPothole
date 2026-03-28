@@ -73,6 +73,7 @@ export function useDriveSession() {
         const event: DetectionEvent = {
           id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
           confirmed: null,
+          speedMph: Number.isFinite(speedRef.current) ? speedRef.current : 0,
           coord: coordRef.current ?? undefined,
           ...result,
         };

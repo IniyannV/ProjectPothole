@@ -5,6 +5,7 @@ export interface DetectionEvent {
   timestamp: number;
   type: EventType;
   magnitude: number;
+  speedMph?: number;
   coord?: [number, number];
   confirmed: boolean | null; // null = pending review
   correctedType?: EventType;

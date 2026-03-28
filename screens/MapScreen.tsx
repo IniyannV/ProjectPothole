@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import Geolocation from '@react-native-community/geolocation';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { useAppData } from '../context/AppDataContext';
@@ -33,10 +34,27 @@ type Hotspot = {
   cost: string;
   color: string;
   coord: [number, number];
+  avgMagnitude?: number;
+  peakMagnitude?: number;
+  avgSpeedMph?: number;
+  estimatedPotholeSizeCm?: number;
+  estimatedRepairCostUsd?: number;
   updatedAtMs?: number;
 };
 
 type LocationStatus = 'locating' | 'live' | 'denied' | 'error';
+
+type InferenceResult = {
+  hotspotId: string;
+  avgMagnitude: number;
+  avgSpeedMph: number;
+  sizeCm: number;
+  sizeLabel: string;
+  repairCostUsd: number;
+  repairCostLabel: string;
+  confidence: number;
+  ranAtMs: number;
+};
 
 const GROUPING_DISTANCE_METERS = 35;
 
@@ -82,6 +100,89 @@ function coerceHotspot(input: CommunityHotspot): Hotspot {
   return {
     ...input,
     color: severityToColor(input.severity),
+  };
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function severityMagnitudeFallback(severity: Hotspot['severity']): number {
+  if (severity === 'high') {
+    return 5.6;
+  }
+
+  if (severity === 'medium') {
+    return 3.6;
+  }
+
+  return 2.2;
+}
+
+function formatUsd(value: number): string {
+  const rounded = Math.round(value);
+  if (rounded >= 1000) {
+    return `$${(rounded / 1000).toFixed(1)}k`;
+  }
+
+  return `$${rounded}`;
+}
+
+function sizeBand(sizeCm: number): string {
+  if (sizeCm >= 95) {
+    return 'Critical';
+  }
+
+  if (sizeCm >= 60) {
+    return 'Large';
+  }
+
+  if (sizeCm >= 30) {
+    return 'Medium';
+  }
+
+  return 'Small';
+}
+
+function estimateHotspotMetrics(hotspot: Hotspot): {
+  avgMagnitude: number;
+  avgSpeedMph: number;
+  sizeCm: number;
+  sizeLabel: string;
+  repairCostUsd: number;
+  repairCostLabel: string;
+} {
+  const avgMagnitude = clamp(
+    hotspot.avgMagnitude ?? severityMagnitudeFallback(hotspot.severity),
+    0.5,
+    14,
+  );
+  const avgSpeedMph = clamp(hotspot.avgSpeedMph ?? 28, 0, 80);
+
+  const computedSize = clamp(
+    (avgMagnitude * 4.2 + avgSpeedMph * 0.32) *
+      (1 + Math.log1p(Math.max(1, hotspot.reports)) * 0.14),
+    8,
+    170,
+  );
+  const sizeCm = hotspot.estimatedPotholeSizeCm ?? computedSize;
+
+  const severityCostBias =
+    hotspot.severity === 'high'
+      ? 320
+      : hotspot.severity === 'medium'
+      ? 180
+      : 90;
+  const computedCost = clamp(120 + sizeCm * 43 + severityCostBias, 120, 15000);
+  const repairCostUsd = hotspot.estimatedRepairCostUsd ?? computedCost;
+
+  return {
+    avgMagnitude,
+    avgSpeedMph,
+    sizeCm,
+    sizeLabel: sizeBand(sizeCm),
+    repairCostUsd,
+    repairCostLabel: formatUsd(repairCostUsd),
   };
 }
 
@@ -143,9 +244,8 @@ function groupNearbyHotspots(hotspots: Hotspot[]): Hotspot[] {
   });
 }
 
-function makeMapHtml(hotspots: Hotspot[], selectedId: string | null) {
+function makeMapHtml(hotspots: Hotspot[]) {
   const hotspotsJson = JSON.stringify(hotspots);
-  const selectedJson = selectedId == null ? 'null' : JSON.stringify(selectedId);
 
   return `<!DOCTYPE html>
 <html>
@@ -198,6 +298,7 @@ function makeMapHtml(hotspots: Hotspot[], selectedId: string | null) {
         display: flex;
         align-items: center;
         justify-content: center;
+        pointer-events: none;
       }
     </style>
   </head>
@@ -207,7 +308,9 @@ function makeMapHtml(hotspots: Hotspot[], selectedId: string | null) {
     <script src="https://unpkg.com/deck.gl@9.0.35/dist.min.js"></script>
     <script>
       const hotspots = ${hotspotsJson};
-      const selectedId = ${selectedJson};
+      let currentSelectedId = null;
+      let suppressNextMapClick = false;
+      let deckOverlay = null;
 
       function hexToRgb(hex) {
         const normalized = (hex || '#378ADD').replace('#', '');
@@ -236,6 +339,24 @@ function makeMapHtml(hotspots: Hotspot[], selectedId: string | null) {
 
         // Log scaling keeps very large clusters readable without exploding marker size.
         return Math.min(1, Math.log1p(reports) / Math.log1p(maxReports));
+      }
+
+      function toRad(value) {
+        return (value * Math.PI) / 180;
+      }
+
+      function distanceMeters(a, b) {
+        const earthRadius = 6371000;
+        const dLat = toRad(b[1] - a[1]);
+        const dLng = toRad(b[0] - a[0]);
+        const lat1 = toRad(a[1]);
+        const lat2 = toRad(b[1]);
+        const sinLat = Math.sin(dLat / 2);
+        const sinLng = Math.sin(dLng / 2);
+        const haversine =
+          sinLat * sinLat + Math.cos(lat1) * Math.cos(lat2) * sinLng * sinLng;
+
+        return 2 * earthRadius * Math.asin(Math.sqrt(haversine));
       }
 
       const map = new maplibregl.Map({
@@ -331,6 +452,8 @@ function makeMapHtml(hotspots: Hotspot[], selectedId: string | null) {
               if (!object) {
                 return;
               }
+              suppressNextMapClick = true;
+              focusHotspot(object.id, true);
               if (window.ReactNativeWebView) {
                 window.ReactNativeWebView.postMessage(
                   JSON.stringify({ type: 'select', id: object.id }),
@@ -366,6 +489,32 @@ function makeMapHtml(hotspots: Hotspot[], selectedId: string | null) {
       let userMarker = null;
       let hasCenteredOnUser = false;
 
+      function focusHotspot(id, shouldCenter) {
+        if (id == null || !deckOverlay) {
+          return;
+        }
+
+        const selectedHotspot = hotspotData.find((h) => h.id === id);
+        if (!selectedHotspot) {
+          return;
+        }
+
+        currentSelectedId = id;
+        deckOverlay.setProps({
+          layers: createDeckLayers(hotspotData, currentSelectedId),
+        });
+
+        if (shouldCenter) {
+          map.easeTo({
+            center: selectedHotspot.position,
+            zoom: Math.max(map.getZoom(), 15.5),
+            pitch: map.getPitch(),
+            bearing: map.getBearing(),
+            duration: 650,
+          });
+        }
+      }
+
       function updateUserLocation(lng, lat, shouldRecenter) {
         if (!Number.isFinite(lng) || !Number.isFinite(lat)) {
           return;
@@ -396,34 +545,53 @@ function makeMapHtml(hotspots: Hotspot[], selectedId: string | null) {
       }
 
       window.__updateUserLocation = updateUserLocation;
+      window.__focusHotspot = focusHotspot;
 
       map.on('load', () => {
-        const deckOverlay = new deck.MapboxOverlay({
+        deckOverlay = new deck.MapboxOverlay({
           interleaved: true,
-          layers: createDeckLayers(hotspotData, selectedId),
+          layers: createDeckLayers(hotspotData, currentSelectedId),
           getCursor: ({ isDragging }) => (isDragging ? 'grabbing' : 'grab'),
         });
 
         map.addControl(deckOverlay);
-
-        if (selectedId != null) {
-          const selectedHotspot = hotspotData.find((h) => h.id === selectedId);
-          if (selectedHotspot) {
-            new maplibregl.Popup({ offset: 16 })
-              .setLngLat([selectedHotspot.coord[0], selectedHotspot.coord[1]])
-              .setHTML(
-                '<div class="map-label"> <b>' + selectedHotspot.name + '</b><br/>' + selectedHotspot.type + ' · ' + selectedHotspot.severity + '<br/>Reports: ' + selectedHotspot.reports + '</div>',
-              )
-              .addTo(map);
-          }
-        }
 
         if (window.ReactNativeWebView) {
           window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ready' }));
         }
       });
 
-      map.on('click', () => {
+      map.on('click', (event) => {
+        if (suppressNextMapClick) {
+          suppressNextMapClick = false;
+          return;
+        }
+
+        if (event && event.lngLat) {
+          const tapCoord = [event.lngLat.lng, event.lngLat.lat];
+          let nearest = null;
+          let nearestDistance = Number.POSITIVE_INFINITY;
+
+          hotspotData.forEach((hotspot) => {
+            const meters = distanceMeters(tapCoord, hotspot.position);
+            if (meters < nearestDistance) {
+              nearest = hotspot;
+              nearestDistance = meters;
+            }
+          });
+
+          if (nearest && nearestDistance <= 22) {
+            suppressNextMapClick = true;
+            focusHotspot(nearest.id, true);
+            if (window.ReactNativeWebView) {
+              window.ReactNativeWebView.postMessage(
+                JSON.stringify({ type: 'select', id: nearest.id }),
+              );
+            }
+            return;
+          }
+        }
+
         if (window.ReactNativeWebView) {
           window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'map-click' }));
         }
@@ -437,6 +605,7 @@ export default function MapScreen() {
   const { communityHotspots, isAppDataLoading, appDataError, userData } =
     useAppData();
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const webViewRef = useRef<WebView>(null);
   const hasCenteredOnUserRef = useRef(false);
   const didShowLocationAlertRef = useRef(false);
@@ -448,6 +617,8 @@ export default function MapScreen() {
   const [userLocation, setUserLocation] = useState<[number, number] | null>(
     null,
   );
+  const [inferenceResult, setInferenceResult] =
+    useState<InferenceResult | null>(null);
   const popupAnim = useRef(new Animated.Value(0)).current;
   const hotspots = useMemo(
     () => groupNearbyHotspots(communityHotspots.map(coerceHotspot)),
@@ -472,14 +643,68 @@ export default function MapScreen() {
   useEffect(() => {
     if (selected && !filtered.some(h => h.id === selected.id)) {
       setSelected(null);
+      setInferenceResult(null);
       popupAnim.setValue(0);
     }
   }, [filtered, popupAnim, selected]);
 
-  const mapHtml = useMemo(
-    () => makeMapHtml(filtered, selected?.id ?? null),
-    [filtered, selected?.id],
-  );
+  const mapHtml = useMemo(() => makeMapHtml(filtered), [filtered]);
+  const selectedMetrics = useMemo(() => {
+    if (!selected) {
+      return null;
+    }
+
+    if (inferenceResult?.hotspotId === selected.id) {
+      return inferenceResult;
+    }
+
+    const estimate = estimateHotspotMetrics(selected);
+    return {
+      hotspotId: selected.id,
+      avgMagnitude: estimate.avgMagnitude,
+      avgSpeedMph: estimate.avgSpeedMph,
+      sizeCm: estimate.sizeCm,
+      sizeLabel: estimate.sizeLabel,
+      repairCostUsd: estimate.repairCostUsd,
+      repairCostLabel: estimate.repairCostLabel,
+      confidence: 0,
+      ranAtMs: 0,
+    };
+  }, [inferenceResult, selected]);
+  const popupBottom = tabBarHeight + insets.bottom + 14;
+
+  function runHotspotInference(hotspot: Hotspot): InferenceResult {
+    const estimate = estimateHotspotMetrics(hotspot);
+    const confidence = clamp(
+      0.45 + Math.log1p(hotspot.reports) * 0.22,
+      0.45,
+      0.98,
+    );
+
+    return {
+      hotspotId: hotspot.id,
+      avgMagnitude: estimate.avgMagnitude,
+      avgSpeedMph: estimate.avgSpeedMph,
+      sizeCm: estimate.sizeCm,
+      sizeLabel: estimate.sizeLabel,
+      repairCostUsd: estimate.repairCostUsd,
+      repairCostLabel: estimate.repairCostLabel,
+      confidence,
+      ranAtMs: Date.now(),
+    };
+  }
+
+  function focusMapOnHotspot(hotspotId: string) {
+    if (!isMapReady || !webViewRef.current) {
+      return;
+    }
+
+    webViewRef.current.injectJavaScript(
+      `window.__focusHotspot && window.__focusHotspot(${JSON.stringify(
+        hotspotId,
+      )}, true); true;`,
+    );
+  }
 
   useEffect(() => {
     if (shouldUseDemoLocation && selectedDemoLocation) {
@@ -646,6 +871,8 @@ export default function MapScreen() {
 
   function handleSelect(hotspot: Hotspot) {
     setSelected(hotspot);
+    setInferenceResult(runHotspotInference(hotspot));
+    focusMapOnHotspot(hotspot.id);
     Animated.spring(popupAnim, {
       toValue: 1,
       useNativeDriver: true,
@@ -659,7 +886,10 @@ export default function MapScreen() {
       toValue: 0,
       duration: 200,
       useNativeDriver: true,
-    }).start(() => setSelected(null));
+    }).start(() => {
+      setSelected(null);
+      setInferenceResult(null);
+    });
   }
 
   function onMapMessage(event: WebViewMessageEvent) {
@@ -718,7 +948,7 @@ export default function MapScreen() {
         style={[styles.filtersRow, { top: insets.top + 8 }]}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* {filters.map(f => (
+        {filters.map(f => (
           <TouchableOpacity
             key={f.key}
             onPress={() => setFilter(f.key)}
@@ -729,7 +959,7 @@ export default function MapScreen() {
                 borderColor: f.color + '88',
               },
             ]}
-          > */}
+          >
             <Text
               style={[
                 styles.filterText,
@@ -775,6 +1005,7 @@ export default function MapScreen() {
         <Animated.View
           style={[
             styles.popup,
+            { bottom: popupBottom },
             {
               opacity: popupAnim,
               transform: [
@@ -811,7 +1042,30 @@ export default function MapScreen() {
                   color: selected.color,
                 },
                 { label: 'Severity', val: selected.severity },
-                { label: 'Est. Cost', val: selected.cost },
+                {
+                  label: 'Accel Avg',
+                  val: selectedMetrics
+                    ? `${selectedMetrics.avgMagnitude.toFixed(2)} m/s²`
+                    : 'N/A',
+                },
+                {
+                  label: 'Speed Avg',
+                  val: selectedMetrics
+                    ? `${selectedMetrics.avgSpeedMph.toFixed(1)} mph`
+                    : 'N/A',
+                },
+                {
+                  label: 'Pothole Size',
+                  val: selectedMetrics
+                    ? `${selectedMetrics.sizeCm.toFixed(1)} cm (${
+                        selectedMetrics.sizeLabel
+                      })`
+                    : 'N/A',
+                },
+                {
+                  label: 'Est. Cost',
+                  val: selectedMetrics?.repairCostLabel ?? selected.cost,
+                },
               ].map(r => (
                 <View key={r.label} style={styles.popupStat}>
                   <Text style={styles.popupStatLabel}>{r.label}</Text>
@@ -963,7 +1217,7 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   popupAccent: { height: 2, width: '100%' },
-  popupContent: { padding: 16 },
+  popupContent: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 18 },
   popupHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -984,8 +1238,8 @@ const styles = StyleSheet.create({
   },
   closeBtn: { padding: 4 },
   closeText: { color: 'rgba(255,255,255,0.6)', fontSize: 11 },
-  popupGrid: { flexDirection: 'row', gap: 0 },
-  popupStat: { flex: 1, alignItems: 'center' },
+  popupGrid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 10 },
+  popupStat: { width: '33.333%', alignItems: 'center', paddingHorizontal: 4 },
   popupStatLabel: {
     fontFamily: 'DM Sans',
     fontSize: 10,
