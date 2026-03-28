@@ -9,6 +9,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer } from '@react-navigation/native';
 import { StatusBar, useColorScheme } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import GlassTabBar from './components/GlassTabBar';
 import HomeScreen from './screens/HomeScreen';
 import InfoScreen from './screens/InfoScreen';
 import MapScreen from './screens/MapScreen';
@@ -23,11 +24,14 @@ function App() {
     <SafeAreaProvider>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <NavigationContainer>
-        <Tab.Navigator>
+        <Tab.Navigator
+          tabBar={props => <GlassTabBar {...props} />}
+          screenOptions={{ headerShown: false }}
+        >
+          <Tab.Screen name="Settings" component={SettingsScreen} />
           <Tab.Screen name="Home" component={HomeScreen} />
           <Tab.Screen name="Map" component={MapScreen} />
           <Tab.Screen name="Info" component={InfoScreen} />
-          <Tab.Screen name="Settings" component={SettingsScreen} />
         </Tab.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>
