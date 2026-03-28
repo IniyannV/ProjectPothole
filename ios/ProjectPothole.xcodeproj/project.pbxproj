@@ -260,7 +260,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 33FYHSNXR3;
+				DEVELOPMENT_TEAM = 3V6VD996K9;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = ProjectPothole/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
@@ -274,7 +274,7 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = org.soumilvoona.pothole;
+				PRODUCT_BUNDLE_IDENTIFIER = org.reactjs.native.example.ProjectPotholeIniyann;
 				PRODUCT_NAME = ProjectPothole;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -291,7 +291,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 33FYHSNXR3;
+				DEVELOPMENT_TEAM = 3V6VD996K9;
 				INFOPLIST_FILE = ProjectPothole/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -304,7 +304,7 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = org.soumilvoona.pothole;
+				PRODUCT_BUNDLE_IDENTIFIER = org.reactjs.native.example.ProjectPotholeIniyann;
 				PRODUCT_NAME = ProjectPothole;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_VERSION = 5.0;
