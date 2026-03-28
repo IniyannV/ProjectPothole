@@ -8,7 +8,6 @@ import {
   ScrollView,
   SafeAreaView,
   Alert,
-  Image,
 } from 'react-native';
 
 // ─── Types ───────────────────────────────────────────────────────────────────

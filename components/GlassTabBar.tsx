@@ -4,112 +4,357 @@ import {
   TouchableOpacity,
   StyleSheet,
   Platform,
+  Dimensions,
+  Animated,
+  ImageSourcePropType,
 } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { BlurView } from '@react-native-community/blur';
-import Ionicons from 'react-native-vector-icons/Ionicons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const ICONS: Record<string, { focused: string; unfocused: string }> = {
-  Home: { focused: 'home', unfocused: 'home-outline' },
-  Map: { focused: 'map', unfocused: 'map-outline' },
-  Info: { focused: 'information-circle', unfocused: 'information-circle-outline' },
-  Settings: { focused: 'settings', unfocused: 'settings-outline' },
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+type TabKey = 'home' | 'map' | 'info' | 'settings';
+
+interface Tab {
+  key: TabKey;
+  label: string;
+  logo: ImageSourcePropType;
+}
+
+const TABS: Tab[] = [
+  { key: 'home', label: 'Home', logo: require('../logos/home.png') },
+  { key: 'map', label: 'Map', logo: require('../logos/map.png') },
+  { key: 'info', label: 'Info', logo: require('../logos/info.png') },
+  {
+    key: 'settings',
+    label: 'Settings',
+    logo: require('../logos/settings.png'),
+  },
+];
+
+const ROUTE_TO_TAB: Record<string, TabKey> = {
+  Home: 'home',
+  Map: 'map',
+  Info: 'info',
+  Settings: 'settings',
 };
 
-export default function GlassTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+const TAB_TO_ROUTE: Record<TabKey, string> = {
+  home: 'Home',
+  map: 'Map',
+  info: 'Info',
+  settings: 'Settings',
+};
+
+function TabItem({
+  tab,
+  isActive,
+  onPress,
+  accessibilityLabel,
+}: {
+  tab: Tab;
+  isActive: boolean;
+  onPress: () => void;
+  accessibilityLabel?: string;
+}) {
+  const scale = React.useRef(new Animated.Value(1)).current;
+  const glow = React.useRef(new Animated.Value(isActive ? 1 : 0)).current;
+
+  React.useEffect(() => {
+    Animated.timing(glow, {
+      toValue: isActive ? 1 : 0,
+      duration: 280,
+      useNativeDriver: true,
+    }).start();
+  }, [glow, isActive]);
+
+  const handlePressIn = () => {
+    Animated.spring(scale, {
+      toValue: 0.88,
+      damping: 12,
+      stiffness: 300,
+      mass: 1,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scale, {
+      toValue: 1,
+      damping: 10,
+      stiffness: 260,
+      mass: 1,
+      useNativeDriver: true,
+    }).start();
+
+    onPress();
+  };
+
+  const pillOpacity = glow.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
+
+  const pillScaleX = glow.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.6, 1],
+  });
+
+  const labelOpacity = glow.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.45, 1],
+  });
+
+  const labelTranslateY = glow.interpolate({
+    inputRange: [0, 1],
+    outputRange: [4, 0],
+  });
+
+  const iconScale = glow.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.14],
+  });
+
+  const iconTranslateY = glow.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -1],
+  });
+
   return (
-    <View style={styles.wrapper}>
-      <View style={styles.container}>
-        {Platform.OS === 'ios' ? (
-          <BlurView
-            style={StyleSheet.absoluteFill}
-            blurType="light"
-            blurAmount={20}
-            reducedTransparencyFallbackColor="rgba(255,255,255,0.85)"
+    <Animated.View style={[styles.tabItem, { transform: [{ scale }] }]}>
+      <TouchableOpacity
+        activeOpacity={1}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        accessibilityRole="button"
+        accessibilityState={isActive ? { selected: true } : {}}
+        accessibilityLabel={accessibilityLabel}
+        style={styles.touchInner}
+      >
+        <Animated.View
+          style={[
+            styles.activePill,
+            { opacity: pillOpacity, transform: [{ scaleX: pillScaleX }] },
+          ]}
+        />
+
+        <Animated.View
+          style={[
+            styles.icon,
+            {
+              transform: [{ scale: iconScale }, { translateY: iconTranslateY }],
+            },
+          ]}
+        >
+          <Animated.Image
+            source={tab.logo}
+            style={[styles.logoImage, !isActive && styles.logoInactive]}
+            resizeMode="contain"
           />
-        ) : (
-          <View style={[StyleSheet.absoluteFill, styles.androidBackground]} />
-        )}
+        </Animated.View>
 
-        {state.routes.map((route, index) => {
-          const { options } = descriptors[route.key];
-          const isFocused = state.index === index;
-          const iconSet = ICONS[route.name] ?? { focused: 'ellipse', unfocused: 'ellipse-outline' };
+        <Animated.Text
+          style={[
+            styles.label,
+            isActive && styles.labelActive,
+            {
+              opacity: labelOpacity,
+              transform: [{ translateY: labelTranslateY }],
+            },
+          ]}
+        >
+          {tab.label}
+        </Animated.Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
 
-          const onPress = () => {
-            const event = navigation.emit({
-              type: 'tabPress',
-              target: route.key,
-              canPreventDefault: true,
-            });
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name);
-            }
-          };
+export default function GlassTabBar({
+  state,
+  descriptors,
+  navigation,
+}: BottomTabBarProps) {
+  const insets = useSafeAreaInsets();
 
-          return (
-            <TouchableOpacity
-              key={route.key}
-              accessibilityRole="button"
-              accessibilityState={isFocused ? { selected: true } : {}}
-              accessibilityLabel={options.tabBarAccessibilityLabel}
-              onPress={onPress}
-              style={styles.tab}
-              activeOpacity={0.7}
-            >
-              {isFocused && <View style={styles.activeIndicator} />}
-              <Ionicons
-                name={isFocused ? iconSet.focused : iconSet.unfocused}
-                size={26}
-                color={isFocused ? '#1a3a6e' : '#9aa3b0'}
+  const activeRoute = state.routes[state.index];
+  const activeTab = ROUTE_TO_TAB[activeRoute.name] ?? 'home';
+
+  const handleTabPress = (key: TabKey) => {
+    const routeName = TAB_TO_ROUTE[key];
+    const route = state.routes.find(item => item.name === routeName);
+
+    if (!route) {
+      return;
+    }
+
+    const isFocused = route.key === activeRoute.key;
+    const event = navigation.emit({
+      type: 'tabPress',
+      target: route.key,
+      canPreventDefault: true,
+    });
+
+    if (!isFocused && !event.defaultPrevented) {
+      navigation.navigate(routeName);
+    }
+  };
+
+  return (
+    <View style={[styles.wrapper, { paddingBottom: insets.bottom + 12 }]}>
+      <View style={styles.outerShell}>
+        <BlurView
+          blurType="dark"
+          blurAmount={Platform.OS === 'ios' ? 30 : 18}
+          reducedTransparencyFallbackColor="rgba(10,10,30,0.7)"
+          style={StyleSheet.absoluteFill}
+        />
+
+        <View style={styles.specularEdge} pointerEvents="none" />
+        <View style={styles.tintOverlay} pointerEvents="none" />
+        <View style={styles.bottomGlow} pointerEvents="none" />
+
+        <View style={styles.tabRow}>
+          {TABS.map(tab => {
+            const routeName = TAB_TO_ROUTE[tab.key];
+            const route = state.routes.find(item => item.name === routeName);
+            const accessibilityLabel = route
+              ? descriptors[route.key]?.options.tabBarAccessibilityLabel
+              : undefined;
+
+            return (
+              <TabItem
+                key={tab.key}
+                tab={tab}
+                isActive={activeTab === tab.key}
+                accessibilityLabel={accessibilityLabel}
+                onPress={() => handleTabPress(tab.key)}
               />
-            </TouchableOpacity>
-          );
-        })}
+            );
+          })}
+        </View>
       </View>
     </View>
   );
 }
 
+const NAVBAR_WIDTH = Math.min(SCREEN_WIDTH - 40, 400);
+const NAVBAR_HEIGHT = 70;
+
 const styles = StyleSheet.create({
   wrapper: {
     position: 'absolute',
-    bottom: 28,
-    left: 24,
-    right: 24,
+    bottom: 0,
+    left: 0,
+    right: 0,
     alignItems: 'center',
   },
-  container: {
-    flexDirection: 'row',
-    borderRadius: 36,
+
+  outerShell: {
+    width: NAVBAR_WIDTH,
+    height: NAVBAR_HEIGHT,
+    borderRadius: 999,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.6)',
-    backgroundColor: 'transparent',
-    // shadow
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 20,
-    elevation: 12,
-    width: '100%',
+    borderColor: 'rgba(255,255,255,0.22)',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.35,
+        shadowRadius: 28,
+      },
+      android: {
+        elevation: 20,
+      },
+    }),
   },
-  androidBackground: {
-    backgroundColor: 'rgba(240, 243, 248, 0.92)',
-    borderRadius: 36,
+
+  specularEdge: {
+    position: 'absolute',
+    top: 0,
+    left: '15%',
+    right: '15%',
+    height: 1,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.65)',
+    zIndex: 10,
   },
-  tab: {
+
+  tintOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(10,10,30,0.28)',
+  },
+
+  bottomGlow: {
+    position: 'absolute',
+    bottom: 0,
+    left: '20%',
+    right: '20%',
+    height: 1.5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(120,140,255,0.30)',
+    zIndex: 10,
+  },
+
+  tabRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    zIndex: 5,
+  },
+
+  tabItem: {
+    flex: 1,
+    height: NAVBAR_HEIGHT,
+  },
+
+  touchInner: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
+    position: 'relative',
+    paddingTop: 4,
   },
-  activeIndicator: {
+
+  activePill: {
     position: 'absolute',
-    top: 10,
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#1a3a6e',
+    top: '18%',
+    bottom: '18%',
+    left: 6,
+    right: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.20)',
+  },
+
+  icon: {
+    marginBottom: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  logoImage: {
+    width: 21,
+    height: 21,
+  },
+
+  logoInactive: {
+    opacity: 0.6,
+  },
+
+  label: {
+    fontSize: 10,
+    fontWeight: '500',
+    letterSpacing: 0.3,
+    color: 'rgba(255,255,255,0.38)',
+    fontFamily: Platform.OS === 'ios' ? 'SF Pro Rounded' : undefined,
+  },
+
+  labelActive: {
+    color: 'rgba(255,255,255,0.92)',
   },
 });
